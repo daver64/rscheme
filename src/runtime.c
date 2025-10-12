@@ -204,3 +204,13 @@ void debug_print(const char* format, ...) {
         va_end(args);
     }
 }
+
+// Function to create procedure objects for compiled lambdas
+SchemeObject* make_compiled_procedure(SchemeObject* (*func)(SchemeObject**, int), int arity, const char* name) {
+    // Create a basic procedure object and set it up for compiled use
+    SchemeObject* proc = make_procedure(NULL, NULL, NULL);  // Use existing constructor
+    proc->value.procedure.func = func;
+    proc->value.procedure.arity = arity;
+    proc->value.procedure.name = _strdup(name);
+    return proc;
+}

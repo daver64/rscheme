@@ -5,6 +5,13 @@
 #include "environment.h"
 #include <stdio.h>
 
+// Lambda function storage
+typedef struct LambdaFunction {
+    char* name;
+    char* code;
+    struct LambdaFunction* next;
+} LambdaFunction;
+
 // Compilation context
 typedef struct CompilerContext {
     FILE* output;
@@ -12,8 +19,11 @@ typedef struct CompilerContext {
     int indent_level;
     int temp_var_counter;
     int label_counter;
+    int function_counter;
     bool optimize;
     char* current_function;
+    LambdaFunction* lambda_functions;  // Linked list of lambda functions
+    FILE* lambda_output;               // Temporary storage for lambda functions
 } CompilerContext;
 
 // Compiler functions
@@ -41,6 +51,9 @@ void compile_comparison(SchemeObject* operands, CompilerContext* ctx, const char
 void compile_cons(SchemeObject* operands, CompilerContext* ctx);
 void compile_car_cdr(SchemeObject* operands, CompilerContext* ctx, const char* operation);
 void compile_type_predicate(SchemeObject* operands, CompilerContext* ctx, const char* predicate);
+void compile_list(SchemeObject* operands, CompilerContext* ctx);
+void compile_single_arg_builtin(SchemeObject* operands, CompilerContext* ctx, const char* function);
+void compile_two_arg_builtin(SchemeObject* operands, CompilerContext* ctx, const char* function);
 
 // Runtime support generation
 void generate_runtime_functions(CompilerContext* ctx);
@@ -50,9 +63,11 @@ void generate_builtin_functions(CompilerContext* ctx);
 // Utility functions
 char* generate_temp_var(CompilerContext* ctx);
 char* generate_label(CompilerContext* ctx);
+char* generate_function_name(CompilerContext* ctx);
 void emit_indent(CompilerContext* ctx);
 void emit_line(CompilerContext* ctx, const char* format, ...);
 void emit_comment(CompilerContext* ctx, const char* comment);
+void emit_lambda_functions(CompilerContext* ctx);
 
 // C code templates
 void emit_object_creation(CompilerContext* ctx, SchemeObject* obj);

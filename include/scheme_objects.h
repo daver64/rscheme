@@ -27,9 +27,12 @@ typedef SchemeObject* (*PrimitiveFn)(SchemeObject* args, Environment* env);
 
 // Procedure representation
 typedef struct {
-    SchemeObject* parameters;  // List of parameter symbols
-    SchemeObject* body;        // List of expressions
-    Environment* closure;      // Captured environment
+    SchemeObject* parameters;  // List of parameter symbols (for interpreted)
+    SchemeObject* body;        // List of expressions (for interpreted)
+    Environment* closure;      // Captured environment (for interpreted)
+    SchemeObject* (*func)(SchemeObject**, int);  // Function pointer (for compiled)
+    int arity;                 // Number of parameters
+    char* name;                // Function name (for debugging)
 } SchemeProcedure;
 
 // Vector representation

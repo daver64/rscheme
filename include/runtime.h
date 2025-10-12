@@ -37,4 +37,7 @@ void set_debug_mode(bool enabled);
 bool is_debug_mode(void);
 void debug_print(const char* format, ...);
 
+// Procedure creation for compiled lambdas
+SchemeObject* make_compiled_procedure(SchemeObject* (*func)(SchemeObject**, int), int arity, const char* name);
+
 #endif // RUNTIME_H
