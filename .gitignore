@@ -1,0 +1,7 @@
+rscheme.pdb
+*.exe
+*.dll
+*.pdb
+
+build/
+bin/
