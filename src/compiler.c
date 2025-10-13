@@ -1,6 +1,12 @@
 #include "rscheme.h"
 #include <stdarg.h>
 
+// Forward declarations
+void compile_lambda_if_expression(SchemeObject* if_expr, SchemeObject* params, char* lambda_code, int* offset, int max_size);
+void compile_lambda_arithmetic(SchemeObject* arith_expr, SchemeObject* params, char* lambda_code, int* offset, int max_size, const char* function_name);
+void compile_lambda_function_call(SchemeObject* call_expr, SchemeObject* params, char* lambda_code, int* offset, int max_size);
+void compile_lambda_expression(SchemeObject* expr, SchemeObject* params, char* lambda_code, int* offset, int max_size, const char* result_var);
+
 CompilerContext* create_compiler_context(FILE* output, Environment* env, bool optimize) {
     CompilerContext* ctx = (CompilerContext*)scheme_malloc(sizeof(CompilerContext));
     ctx->output = output;
@@ -185,6 +191,29 @@ void generate_runtime_functions(CompilerContext* ctx) {
     
     fprintf(ctx->output, "bool is_nil(SchemeObject* obj) {\n");
     fprintf(ctx->output, "    return obj == scheme_nil;\n");
+    fprintf(ctx->output, "}\n\n");
+    
+    fprintf(ctx->output, "bool is_procedure(SchemeObject* obj) {\n");
+    fprintf(ctx->output, "    return obj && obj->type == SCHEME_PROCEDURE;\n");
+    fprintf(ctx->output, "}\n\n");
+    
+    fprintf(ctx->output, "bool is_symbol(SchemeObject* obj) {\n");
+    fprintf(ctx->output, "    return obj && obj->type == SCHEME_SYMBOL;\n");
+    fprintf(ctx->output, "}\n\n");
+    
+    fprintf(ctx->output, "SchemeObject* call_procedure(SchemeObject* proc, SchemeObject** args, int argc) {\n");
+    fprintf(ctx->output, "    if (!proc || !is_procedure(proc)) {\n");
+    fprintf(ctx->output, "        return scheme_nil;\n");
+    fprintf(ctx->output, "    }\n");
+    fprintf(ctx->output, "    \n");
+    fprintf(ctx->output, "    // Check if it's a compiled procedure (has func pointer)\n");
+    fprintf(ctx->output, "    if (proc->value.procedure.func) {\n");
+    fprintf(ctx->output, "        return proc->value.procedure.func(args, argc);\n");
+    fprintf(ctx->output, "    }\n");
+    fprintf(ctx->output, "    \n");
+    fprintf(ctx->output, "    // For interpreted procedures, we can't handle them in compiled code\n");
+    fprintf(ctx->output, "    // This would require a full interpreter runtime\n");
+    fprintf(ctx->output, "    return scheme_nil;\n");
     fprintf(ctx->output, "}\n\n");
     
     // List operations
@@ -1189,202 +1218,69 @@ void compile_lambda(SchemeObject* args, CompilerContext* ctx) {
     offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
                       "    // Function body\n");
     
-    // Instead of hand-coding the body compilation, let's use a simpler approach
-    // For now, just implement the basic cases we know work
+    // Now we need to properly compile the lambda body using the expression compiler
+    // But we need to handle parameter references specially
+    
+    // Create a simple compilation for the body that uses compile_expression logic
     if (is_number(body)) {
         offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
                           "    result = make_number(%.6g);\n", body->value.number_value);
     } else if (is_symbol(body)) {
         // Check if it's a parameter reference
         bool is_param = false;
-        SchemeObject* current = params;
-        while (current && is_pair(current)) {
-            if (is_symbol(car(current)) && strcmp(car(current)->value.symbol_name, body->value.symbol_name) == 0) {
+        SchemeObject* param_check = params;
+        while (param_check && is_pair(param_check)) {
+            if (is_symbol(car(param_check)) && strcmp(car(param_check)->value.symbol_name, body->value.symbol_name) == 0) {
                 offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
                                  "    result = local_%s;\n", body->value.symbol_name);
                 is_param = true;
                 break;
             }
-            current = cdr(current);
+            param_check = cdr(param_check);
         }
         if (!is_param) {
             offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
                               "    result = lookup_variable(\"%s\");\n", body->value.symbol_name);
         }
     } else if (is_pair(body)) {
-        // For now, just implement multiplication and addition
+        // This is where we need to handle full expression compilation
+        // For now, let's handle the key cases and then expand
+        
         SchemeObject* op = car(body);
-        
-        // Debug: Add a comment to show what operator we found
-        const char* debug_op = is_symbol(op) ? op->value.symbol_name : (is_number(op) ? "number" : "not-symbol");
-        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                          "    // Debug: Found operator: %s\n", debug_op);
-        
-        if (is_symbol(op) && strcmp(op->value.symbol_name, "*") == 0) {
-            // Simple case: (* x x) where both args are symbols
-            SchemeObject* arg1 = car(cdr(body));
-            SchemeObject* arg2 = car(cdr(cdr(body)));
-            if (is_symbol(arg1) && is_symbol(arg2)) {
-                offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                 "    {\n");
-                
-                // Check if arg1 is a parameter
-                bool arg1_is_param = false;
-                SchemeObject* param_check = params;
-                while (param_check && is_pair(param_check)) {
-                    if (is_symbol(car(param_check)) && strcmp(car(param_check)->value.symbol_name, arg1->value.symbol_name) == 0) {
-                        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                         "        SchemeObject* temp1 = local_%s;\n", arg1->value.symbol_name);
-                        arg1_is_param = true;
-                        break;
-                    }
-                    param_check = cdr(param_check);
-                }
-                if (!arg1_is_param) {
-                    offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                     "        SchemeObject* temp1 = lookup_variable(\"%s\");\n", arg1->value.symbol_name);
-                }
-                
-                // Check if arg2 is a parameter
-                bool arg2_is_param = false;
-                param_check = params;
-                while (param_check && is_pair(param_check)) {
-                    if (is_symbol(car(param_check)) && strcmp(car(param_check)->value.symbol_name, arg2->value.symbol_name) == 0) {
-                        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                         "        SchemeObject* temp2 = local_%s;\n", arg2->value.symbol_name);
-                        arg2_is_param = true;
-                        break;
-                    }
-                    param_check = cdr(param_check);
-                }
-                if (!arg2_is_param) {
-                    offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                     "        SchemeObject* temp2 = lookup_variable(\"%s\");\n", arg2->value.symbol_name);
-                }
-                
-                offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                 "        result = scheme_multiply(temp1, temp2);\n");
-                offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                 "    }\n");
-            } else {
-                offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                 "    result = scheme_nil; // Complex multiplication\n");
+        if (!op) {
+            offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
+                             "    result = scheme_nil; // Empty operation\n");
+        } else if (is_symbol(op)) {
+            const char* op_name = op->value.symbol_name;
+            
+            // Handle if expressions
+            if (strcmp(op_name, "if") == 0) {
+                compile_lambda_if_expression(body, params, lambda_code, &offset, sizeof(lambda_code));
             }
-        } else if (is_symbol(op) && strcmp(op->value.symbol_name, "+") == 0) {
-            // Simple case: (+ x y) where both args are symbols
-            SchemeObject* arg1 = car(cdr(body));
-            SchemeObject* arg2 = car(cdr(cdr(body)));
-            if (is_symbol(arg1) && is_symbol(arg2)) {
-                offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                 "    {\n");
-                
-                // Check if arg1 is a parameter
-                bool arg1_is_param = false;
-                SchemeObject* param_check = params;
-                while (param_check && is_pair(param_check)) {
-                    if (is_symbol(car(param_check)) && strcmp(car(param_check)->value.symbol_name, arg1->value.symbol_name) == 0) {
-                        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                         "        SchemeObject* temp1 = local_%s;\n", arg1->value.symbol_name);
-                        arg1_is_param = true;
-                        break;
-                    }
-                    param_check = cdr(param_check);
-                }
-                if (!arg1_is_param) {
-                    offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                     "        SchemeObject* temp1 = lookup_variable(\"%s\");\n", arg1->value.symbol_name);
-                }
-                
-                // Check if arg2 is a parameter
-                bool arg2_is_param = false;
-                param_check = params;
-                while (param_check && is_pair(param_check)) {
-                    if (is_symbol(car(param_check)) && strcmp(car(param_check)->value.symbol_name, arg2->value.symbol_name) == 0) {
-                        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                         "        SchemeObject* temp2 = local_%s;\n", arg2->value.symbol_name);
-                        arg2_is_param = true;
-                        break;
-                    }
-                    param_check = cdr(param_check);
-                }
-                if (!arg2_is_param) {
-                    offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                     "        SchemeObject* temp2 = lookup_variable(\"%s\");\n", arg2->value.symbol_name);
-                }
-                
-                offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                 "        result = scheme_add(temp1, temp2);\n");
-                offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                 "    }\n");
-            } else {
-                offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                 "    result = scheme_nil; // Complex addition\n");
+            // Handle arithmetic operations
+            else if (strcmp(op_name, "*") == 0) {
+                compile_lambda_arithmetic(body, params, lambda_code, &offset, sizeof(lambda_code), "scheme_multiply");
+            }
+            else if (strcmp(op_name, "+") == 0) {
+                compile_lambda_arithmetic(body, params, lambda_code, &offset, sizeof(lambda_code), "scheme_add");
+            }
+            else if (strcmp(op_name, "-") == 0) {
+                compile_lambda_arithmetic(body, params, lambda_code, &offset, sizeof(lambda_code), "scheme_subtract");
+            }
+            else if (strcmp(op_name, "/") == 0) {
+                compile_lambda_arithmetic(body, params, lambda_code, &offset, sizeof(lambda_code), "scheme_divide");
+            }
+            // Handle comparison operations
+            else if (strcmp(op_name, "=") == 0) {
+                compile_lambda_arithmetic(body, params, lambda_code, &offset, sizeof(lambda_code), "scheme_equal");
+            }
+            // Handle function calls (including user-defined functions)
+            else {
+                compile_lambda_function_call(body, params, lambda_code, &offset, sizeof(lambda_code));
             }
         } else {
-            // Handle user-defined functions or unknown operators
-            const char* op_name = is_symbol(op) ? op->value.symbol_name : "not-symbol";
-            // For user-defined functions, try to call them
-            if (is_symbol(op)) {
-                // Count arguments
-                int arg_count = 0;
-                SchemeObject* temp = cdr(body);
-                while (temp && is_pair(temp)) {
-                    arg_count++;
-                    temp = cdr(temp);
-                }
-                
-                if (arg_count == 1) {
-                    // Single argument function call like (square x)
-                    SchemeObject* arg = car(cdr(body));
-                    if (is_symbol(arg)) {
-                        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                         "    {\n");
-                        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                         "        SchemeObject* func = lookup_variable(\"%s\");\n", op_name);
-                        
-                        // Check if argument is a parameter
-                        bool arg_is_param = false;
-                        SchemeObject* param_check = params;
-                        while (param_check && is_pair(param_check)) {
-                            if (is_symbol(car(param_check)) && strcmp(car(param_check)->value.symbol_name, arg->value.symbol_name) == 0) {
-                                offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                                 "        SchemeObject* arg_val = local_%s;\n", arg->value.symbol_name);
-                                arg_is_param = true;
-                                break;
-                            }
-                            param_check = cdr(param_check);
-                        }
-                        if (!arg_is_param) {
-                            offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                             "        SchemeObject* arg_val = lookup_variable(\"%s\");\n", arg->value.symbol_name);
-                        }
-                        
-                        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                         "        SchemeObject* args_array[1] = {arg_val};\n");
-                        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                         "        if (func && is_procedure(func)) {\n");
-                        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                         "            result = call_procedure(func, args_array, 1);\n");
-                        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                         "        } else {\n");
-                        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                         "            result = scheme_nil;\n");
-                        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                         "        }\n");
-                        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                         "    }\n");
-                    } else {
-                        offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                         "    result = scheme_nil; // Complex function call with %s\n", op_name);
-                    }
-                } else {
-                    offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                     "    result = scheme_nil; // Multi-arg function call with %s\n", op_name);
-                }
-            } else {
-                offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
-                                 "    result = scheme_nil; // Unhandled operator: %s\n", op_name);
-            }
+            offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
+                             "    result = scheme_nil; // Non-symbol operator\n");
         }
     } else {
         offset += snprintf(lambda_code + offset, sizeof(lambda_code) - offset,
@@ -1410,6 +1306,295 @@ void compile_lambda(SchemeObject* args, CompilerContext* ctx) {
     emit_line(ctx, "result = make_compiled_procedure(%s, %d, \"%s\");", func_name, arity, func_name);
     
     scheme_free(func_name);
+}
+
+// Helper function to compile if expressions in lambda bodies
+void compile_lambda_if_expression(SchemeObject* if_expr, SchemeObject* params, char* lambda_code, int* offset, int max_size) {
+    // if_expr is (if condition then_expr else_expr)
+    SchemeObject* condition = car(cdr(if_expr));
+    SchemeObject* then_expr = car(cdr(cdr(if_expr)));
+    SchemeObject* else_expr = car(cdr(cdr(cdr(if_expr))));
+    
+    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                       "    {\n");
+    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                       "        SchemeObject* condition_result;\n");
+    
+    // Compile the condition
+    compile_lambda_expression(condition, params, lambda_code, offset, max_size, "condition_result");
+    
+    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                       "        if (is_true(condition_result)) {\n");
+    
+    // Compile then expression
+    compile_lambda_expression(then_expr, params, lambda_code, offset, max_size, "result");
+    
+    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                       "        } else {\n");
+    
+    // Compile else expression
+    if (else_expr) {
+        compile_lambda_expression(else_expr, params, lambda_code, offset, max_size, "result");
+    } else {
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "            result = scheme_nil;\n");
+    }
+    
+    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                       "        }\n");
+    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                       "    }\n");
+}
+
+// Helper function to compile arithmetic operations in lambda bodies
+void compile_lambda_arithmetic(SchemeObject* arith_expr, SchemeObject* params, char* lambda_code, int* offset, int max_size, const char* function_name) {
+    // arith_expr is (op arg1 arg2 ...)
+    SchemeObject* arg1 = car(cdr(arith_expr));
+    SchemeObject* arg2 = car(cdr(cdr(arith_expr)));
+    
+    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                       "    {\n");
+    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                       "        SchemeObject* temp1;\n");
+    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                       "        SchemeObject* temp2;\n");
+    
+    // Compile first argument
+    compile_lambda_expression(arg1, params, lambda_code, offset, max_size, "temp1");
+    
+    // Compile second argument
+    compile_lambda_expression(arg2, params, lambda_code, offset, max_size, "temp2");
+    
+    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                       "        result = %s(temp1, temp2);\n", function_name);
+    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                       "    }\n");
+}
+
+// Helper function to compile function calls in lambda bodies
+void compile_lambda_function_call(SchemeObject* call_expr, SchemeObject* params, char* lambda_code, int* offset, int max_size) {
+    SchemeObject* function = car(call_expr);
+    const char* func_name = is_symbol(function) ? function->value.symbol_name : "unknown";
+    
+    // Count arguments
+    int arg_count = 0;
+    SchemeObject* temp = cdr(call_expr);
+    while (temp && is_pair(temp)) {
+        arg_count++;
+        temp = cdr(temp);
+    }
+    
+    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                       "    {\n");
+    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                       "        SchemeObject* func = lookup_variable(\"%s\");\n", func_name);
+    
+    if (arg_count > 0) {
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "        SchemeObject* args_array[%d];\n", arg_count);
+        
+        // Compile arguments
+        temp = cdr(call_expr);
+        for (int i = 0; i < arg_count; i++) {
+            if (temp && is_pair(temp)) {
+                SchemeObject* arg = car(temp);
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "        {\n");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            SchemeObject* arg_temp;\n");
+                compile_lambda_expression(arg, params, lambda_code, offset, max_size, "arg_temp");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            args_array[%d] = arg_temp;\n", i);
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "        }\n");
+                temp = cdr(temp);
+            }
+        }
+        
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "        if (func && is_procedure(func)) {\n");
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "            result = call_procedure(func, args_array, %d);\n", arg_count);
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "        } else {\n");
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "            result = scheme_nil;\n");
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "        }\n");
+    } else {
+        // No arguments
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "        if (func && is_procedure(func)) {\n");
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "            result = call_procedure(func, NULL, 0);\n");
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "        } else {\n");
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "            result = scheme_nil;\n");
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "        }\n");
+    }
+    
+    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                       "    }\n");
+}
+
+// Helper function to compile any expression in lambda bodies
+void compile_lambda_expression(SchemeObject* expr, SchemeObject* params, char* lambda_code, int* offset, int max_size, const char* result_var) {
+    if (!expr) {
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "        %s = scheme_nil;\n", result_var);
+        return;
+    }
+    
+    if (is_number(expr)) {
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "        %s = make_number(%.6g);\n", result_var, expr->value.number_value);
+    } else if (is_symbol(expr)) {
+        // Check if it's a parameter reference
+        bool is_param = false;
+        SchemeObject* param_check = params;
+        while (param_check && is_pair(param_check)) {
+            if (is_symbol(car(param_check)) && strcmp(car(param_check)->value.symbol_name, expr->value.symbol_name) == 0) {
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "        %s = local_%s;\n", result_var, expr->value.symbol_name);
+                is_param = true;
+                break;
+            }
+            param_check = cdr(param_check);
+        }
+        if (!is_param) {
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "        %s = lookup_variable(\"%s\");\n", result_var, expr->value.symbol_name);
+        }
+    } else if (is_boolean(expr)) {
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "        %s = make_boolean(%s);\n", result_var, expr->value.boolean_value ? "true" : "false");
+    } else if (is_string(expr)) {
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "        %s = make_string(\"%s\");\n", result_var, expr->value.string_value);
+    } else if (is_pair(expr)) {
+        // Handle compound expressions recursively
+        SchemeObject* op = car(expr);
+        if (is_symbol(op)) {
+            const char* op_name = op->value.symbol_name;
+            
+            // Handle arithmetic and comparison operations
+            if (strcmp(op_name, "=") == 0) {
+                SchemeObject* arg1 = car(cdr(expr));
+                SchemeObject* arg2 = car(cdr(cdr(expr)));
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "        {\n");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            SchemeObject* temp1;\n");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            SchemeObject* temp2;\n");
+                compile_lambda_expression(arg1, params, lambda_code, offset, max_size, "temp1");
+                compile_lambda_expression(arg2, params, lambda_code, offset, max_size, "temp2");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            %s = scheme_equal(temp1, temp2);\n", result_var);
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "        }\n");
+            } else if (strcmp(op_name, "*") == 0) {
+                SchemeObject* arg1 = car(cdr(expr));
+                SchemeObject* arg2 = car(cdr(cdr(expr)));
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "        {\n");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            SchemeObject* temp1;\n");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            SchemeObject* temp2;\n");
+                compile_lambda_expression(arg1, params, lambda_code, offset, max_size, "temp1");
+                compile_lambda_expression(arg2, params, lambda_code, offset, max_size, "temp2");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            %s = scheme_multiply(temp1, temp2);\n", result_var);
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "        }\n");
+            } else if (strcmp(op_name, "-") == 0) {
+                SchemeObject* arg1 = car(cdr(expr));
+                SchemeObject* arg2 = car(cdr(cdr(expr)));
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "        {\n");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            SchemeObject* temp1;\n");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            SchemeObject* temp2;\n");
+                compile_lambda_expression(arg1, params, lambda_code, offset, max_size, "temp1");
+                compile_lambda_expression(arg2, params, lambda_code, offset, max_size, "temp2");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            %s = scheme_subtract(temp1, temp2);\n", result_var);
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "        }\n");
+            } else {
+                // Function call
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "        {\n");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            SchemeObject* func = lookup_variable(\"%s\");\n", op_name);
+                
+                // Count arguments
+                int arg_count = 0;
+                SchemeObject* temp = cdr(expr);
+                while (temp && is_pair(temp)) {
+                    arg_count++;
+                    temp = cdr(temp);
+                }
+                
+                if (arg_count > 0) {
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "            SchemeObject* args_array[%d];\n", arg_count);
+                    
+                    temp = cdr(expr);
+                    for (int i = 0; i < arg_count; i++) {
+                        if (temp && is_pair(temp)) {
+                            SchemeObject* arg = car(temp);
+                            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                               "            {\n");
+                            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                               "                SchemeObject* arg_temp;\n");
+                            compile_lambda_expression(arg, params, lambda_code, offset, max_size, "arg_temp");
+                            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                               "                args_array[%d] = arg_temp;\n", i);
+                            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                               "            }\n");
+                            temp = cdr(temp);
+                        }
+                    }
+                    
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "            if (func && is_procedure(func)) {\n");
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "                %s = call_procedure(func, args_array, %d);\n", result_var, arg_count);
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "            } else {\n");
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "                %s = scheme_nil;\n", result_var);
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "            }\n");
+                } else {
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "            if (func && is_procedure(func)) {\n");
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "                %s = call_procedure(func, NULL, 0);\n", result_var);
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "            } else {\n");
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "                %s = scheme_nil;\n", result_var);
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "            }\n");
+                }
+                
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "        }\n");
+            }
+        } else {
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "        %s = scheme_nil; // Non-symbol operator\n", result_var);
+        }
+    } else {
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "        %s = scheme_nil; // Unsupported expression type\n", result_var);
+    }
 }
 
 void compile_define(SchemeObject* args, CompilerContext* ctx) {
