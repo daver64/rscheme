@@ -6,6 +6,11 @@ void compile_lambda_if_expression(SchemeObject* if_expr, SchemeObject* params, c
 void compile_lambda_arithmetic(SchemeObject* arith_expr, SchemeObject* params, char* lambda_code, int* offset, int max_size, const char* function_name);
 void compile_lambda_function_call(SchemeObject* call_expr, SchemeObject* params, char* lambda_code, int* offset, int max_size);
 void compile_lambda_expression(SchemeObject* expr, SchemeObject* params, char* lambda_code, int* offset, int max_size, const char* result_var);
+void compile_define(SchemeObject* operands, CompilerContext* ctx);
+void compile_quoted_expression(SchemeObject* expr, CompilerContext* ctx);
+bool is_simple_list(SchemeObject* expr);
+void compile_simple_quoted_list(SchemeObject* list_expr, CompilerContext* ctx);
+void compile_quoted_value_to_variable(SchemeObject* expr, CompilerContext* ctx, int temp_var, const char* var_name);
 
 CompilerContext* create_compiler_context(FILE* output, Environment* env, bool optimize) {
     CompilerContext* ctx = (CompilerContext*)scheme_malloc(sizeof(CompilerContext));
@@ -555,6 +560,9 @@ void compile_application(SchemeObject* expr, CompilerContext* ctx) {
             return;
         } else if (strcmp(name, "lambda") == 0) {
             compile_lambda(operands, ctx);
+            return;
+        } else if (strcmp(name, "set!") == 0) {
+            compile_set(operands, ctx);
             return;
         } else if (strcmp(name, "begin") == 0) {
             compile_begin(operands, ctx);
@@ -1112,20 +1120,136 @@ void compile_quote(SchemeObject* operands, CompilerContext* ctx) {
         return;
     }
     
-    // For simple compilation, just handle basic quoted values
     SchemeObject* quoted = car(operands);
-    if (is_number(quoted)) {
-        emit_line(ctx, "result = make_number(%.6g);", quoted->value.number_value);
-    } else if (is_boolean(quoted)) {
-        emit_line(ctx, "result = make_boolean(%s);", quoted->value.boolean_value ? "true" : "false");
-    } else if (is_string(quoted)) {
-        emit_line(ctx, "result = make_string(\"%s\");", quoted->value.string_value);
-    } else if (is_symbol(quoted)) {
-        emit_line(ctx, "result = make_symbol(\"%s\");", quoted->value.symbol_name);
-    } else if (is_nil(quoted)) {
+    compile_quoted_expression(quoted, ctx);
+}
+
+void compile_quoted_expression(SchemeObject* expr, CompilerContext* ctx) {
+    if (!expr || is_nil(expr)) {
         emit_line(ctx, "result = scheme_nil;");
+    } else if (is_number(expr)) {
+        emit_line(ctx, "result = make_number(%.6g);", expr->value.number_value);
+    } else if (is_boolean(expr)) {
+        emit_line(ctx, "result = make_boolean(%s);", expr->value.boolean_value ? "true" : "false");
+    } else if (is_string(expr)) {
+        emit_line(ctx, "result = make_string(\"%s\");", expr->value.string_value);
+    } else if (is_symbol(expr)) {
+        emit_line(ctx, "result = make_symbol(\"%s\");", expr->value.symbol_name);
+    } else if (is_pair(expr)) {
+        // Handle quoted lists - need to construct the list
+        // For now, handle simple lists like '(1 2 3 4)
+        if (is_simple_list(expr)) {
+            compile_simple_quoted_list(expr, ctx);
+        } else {
+            // Handle general pairs
+            emit_line(ctx, "{");
+            emit_line(ctx, "    SchemeObject* car_part;");
+            emit_line(ctx, "    SchemeObject* cdr_part;");
+            
+            // Recursively compile car and cdr
+            int temp_var = ctx->temp_var_counter++;
+            emit_line(ctx, "    // Compile car of pair");
+            emit_line(ctx, "    {");
+            emit_line(ctx, "        SchemeObject* temp_result_%d;", temp_var);
+            
+            // We need to compile the car without affecting the main result
+            // This is tricky with the current architecture, so let's use a simpler approach
+            compile_quoted_value_to_variable(car(expr), ctx, temp_var, "car_part");
+            
+            emit_line(ctx, "    }");
+            
+            temp_var = ctx->temp_var_counter++;
+            emit_line(ctx, "    // Compile cdr of pair");
+            emit_line(ctx, "    {");
+            compile_quoted_value_to_variable(cdr(expr), ctx, temp_var, "cdr_part");
+            emit_line(ctx, "    }");
+            
+            emit_line(ctx, "    result = make_pair(car_part, cdr_part);");
+            emit_line(ctx, "}");
+        }
     } else {
-        emit_line(ctx, "result = scheme_nil; // Complex quoted structure not implemented");
+        emit_line(ctx, "result = scheme_nil; // Unknown quoted type");
+    }
+}
+
+// Helper function to check if this is a simple list (not nested pairs)
+bool is_simple_list(SchemeObject* expr) {
+    while (expr && is_pair(expr)) {
+        SchemeObject* item = car(expr);
+        // If any item is complex (pair), it's not a simple list
+        if (is_pair(item)) {
+            return false;
+        }
+        expr = cdr(expr);
+    }
+    return true; // All items are simple values
+}
+
+// Helper function to compile a simple quoted list like '(1 2 3 4)
+void compile_simple_quoted_list(SchemeObject* list_expr, CompilerContext* ctx) {
+    emit_comment(ctx, "Building simple quoted list");
+    
+    // Count elements
+    int count = 0;
+    SchemeObject* temp = list_expr;
+    while (temp && is_pair(temp)) {
+        count++;
+        temp = cdr(temp);
+    }
+    
+    if (count == 0) {
+        emit_line(ctx, "result = scheme_nil;");
+        return;
+    }
+    
+    emit_line(ctx, "{");
+    
+    // Create variables for each element
+    emit_line(ctx, "    SchemeObject* elements[%d];", count);
+    
+    // Compile each element
+    temp = list_expr;
+    for (int i = 0; i < count; i++) {
+        if (temp && is_pair(temp)) {
+            SchemeObject* item = car(temp);
+            if (is_number(item)) {
+                emit_line(ctx, "    elements[%d] = make_number(%.6g);", i, item->value.number_value);
+            } else if (is_boolean(item)) {
+                emit_line(ctx, "    elements[%d] = make_boolean(%s);", i, item->value.boolean_value ? "true" : "false");
+            } else if (is_string(item)) {
+                emit_line(ctx, "    elements[%d] = make_string(\"%s\");", i, item->value.string_value);
+            } else if (is_symbol(item)) {
+                emit_line(ctx, "    elements[%d] = make_symbol(\"%s\");", i, item->value.symbol_name);
+            } else {
+                emit_line(ctx, "    elements[%d] = scheme_nil;", i);
+            }
+            temp = cdr(temp);
+        }
+    }
+    
+    // Build the list from right to left
+    emit_line(ctx, "    result = scheme_nil;");
+    for (int i = count - 1; i >= 0; i--) {
+        emit_line(ctx, "    result = make_pair(elements[%d], result);", i);
+    }
+    
+    emit_line(ctx, "}");
+}
+
+// Helper function to compile a quoted value to a specific variable
+void compile_quoted_value_to_variable(SchemeObject* expr, CompilerContext* ctx, int temp_var, const char* var_name) {
+    if (!expr || is_nil(expr)) {
+        emit_line(ctx, "        %s = scheme_nil;", var_name);
+    } else if (is_number(expr)) {
+        emit_line(ctx, "        %s = make_number(%.6g);", var_name, expr->value.number_value);
+    } else if (is_boolean(expr)) {
+        emit_line(ctx, "        %s = make_boolean(%s);", var_name, expr->value.boolean_value ? "true" : "false");
+    } else if (is_string(expr)) {
+        emit_line(ctx, "        %s = make_string(\"%s\");", var_name, expr->value.string_value);
+    } else if (is_symbol(expr)) {
+        emit_line(ctx, "        %s = make_symbol(\"%s\");", var_name, expr->value.symbol_name);
+    } else {
+        emit_line(ctx, "        %s = scheme_nil; // Complex quoted value", var_name);
     }
 }
 
@@ -1622,8 +1746,34 @@ void compile_define(SchemeObject* args, CompilerContext* ctx) {
 }
 
 void compile_set(SchemeObject* args, CompilerContext* ctx) {
-    (void)args; (void)ctx;
-    emit_line(ctx, "result = scheme_nil; // Set! compilation not implemented in simple compiler");
+    emit_comment(ctx, "Set! - Variable assignment");
+    
+    if (!args || is_nil(args)) {
+        emit_line(ctx, "result = scheme_nil; // No arguments to set!");
+        return;
+    }
+    
+    SchemeObject* var = car(args);
+    SchemeObject* value_args = cdr(args);
+    
+    if (!value_args || is_nil(value_args)) {
+        emit_line(ctx, "result = scheme_nil; // No value provided for set!");
+        return;
+    }
+    
+    SchemeObject* value_expr = car(value_args);
+    
+    if (!var || !is_symbol(var)) {
+        emit_line(ctx, "result = scheme_nil; // Invalid variable name for set!");
+        return;
+    }
+    
+    // Compile the value expression
+    compile_expression(value_expr, ctx);
+    
+    // Set the variable value (reuse define_variable which handles updates)
+    emit_line(ctx, "define_variable(\"%s\", result);", var->value.symbol_name);
+    emit_line(ctx, "// Variable '%s' updated via set!", var->value.symbol_name);
 }
 
 void compile_begin(SchemeObject* args, CompilerContext* ctx) {
