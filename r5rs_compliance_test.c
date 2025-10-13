@@ -339,7 +339,7 @@ SchemeObject* scheme_null_p(SchemeObject* obj) {
 }
 
 SchemeObject* scheme_procedure_p(SchemeObject* obj) {
-    return make_boolean(obj && obj->type == SCHEME_PROCEDURE);
+    return make_boolean(obj && (obj->type == SCHEME_PROCEDURE || obj->type == SCHEME_PRIMITIVE));
 }
 
 SchemeObject* scheme_length(SchemeObject* obj) {
@@ -425,11 +425,31 @@ SchemeObject* scheme_reverse(SchemeObject* list) {
     return result;
 }
 
+int is_builtin_function(const char* name) {
+    const char* builtins[] = {
+        "+", "-", "*", "/", "=", "<", ">", "<=", ">=",
+        "car", "cdr", "cons", "length", "list-ref", "append", "reverse",
+        "display", "newline", "string-length", "string-ref",
+        "number?", "boolean?", "string?", "symbol?", "pair?", "null?", "procedure?",
+        NULL
+    };
+    for (int i = 0; builtins[i] != NULL; i++) {
+        if (strcmp(name, builtins[i]) == 0) return 1;
+    }
+    return 0;
+}
+
 SchemeObject* lookup_variable(const char* name) {
     for (int i = 0; i < var_count; i++) {
         if (strcmp(var_names[i], name) == 0) {
             return var_values[i];
         }
+    }
+    // Check for built-in functions and return primitive objects
+    if (is_builtin_function(name)) {
+        SchemeObject* prim = malloc(sizeof(SchemeObject));
+        prim->type = SCHEME_PRIMITIVE;
+        return prim; // Return primitive for built-in functions
     }
     return make_symbol(name); // Return symbol if not found
 }
@@ -467,23 +487,11 @@ SchemeObject* lambda_func_4(SchemeObject** args, int argc) {
         {
             SchemeObject* arg_temp;
         {
-            SchemeObject* func = lookup_variable("+");
-            SchemeObject* args_array[2];
-            {
-                SchemeObject* arg_temp;
-        arg_temp = local_x;
-                args_array[0] = arg_temp;
-            }
-            {
-                SchemeObject* arg_temp;
-        arg_temp = make_number(1);
-                args_array[1] = arg_temp;
-            }
-            if (func && is_procedure(func)) {
-                arg_temp = call_procedure(func, args_array, 2);
-            } else {
-                arg_temp = scheme_nil;
-            }
+            SchemeObject* temp1;
+            SchemeObject* temp2;
+        temp1 = local_x;
+        temp2 = make_number(1);
+            arg_temp = scheme_add(temp1, temp2);
         }
             args_array[0] = arg_temp;
         }

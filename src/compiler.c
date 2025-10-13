@@ -429,7 +429,7 @@ void generate_runtime_functions(CompilerContext* ctx) {
     fprintf(ctx->output, "}\n\n");
     
     fprintf(ctx->output, "SchemeObject* scheme_procedure_p(SchemeObject* obj) {\n");
-    fprintf(ctx->output, "    return make_boolean(obj && obj->type == SCHEME_PROCEDURE);\n");
+    fprintf(ctx->output, "    return make_boolean(obj && (obj->type == SCHEME_PROCEDURE || obj->type == SCHEME_PRIMITIVE));\n");
     fprintf(ctx->output, "}\n\n");
     
     fprintf(ctx->output, "SchemeObject* scheme_length(SchemeObject* obj) {\n");
@@ -515,12 +515,34 @@ void generate_runtime_functions(CompilerContext* ctx) {
     fprintf(ctx->output, "    return result;\n");
     fprintf(ctx->output, "}\n\n");
     
+    // Generate builtin function checker
+    fprintf(ctx->output, "int is_builtin_function(const char* name) {\n");
+    fprintf(ctx->output, "    const char* builtins[] = {\n");
+    fprintf(ctx->output, "        \"+\", \"-\", \"*\", \"/\", \"=\", \"<\", \">\", \"<=\", \">=\",\n");
+    fprintf(ctx->output, "        \"car\", \"cdr\", \"cons\", \"length\", \"list-ref\", \"append\", \"reverse\",\n");
+    fprintf(ctx->output, "        \"display\", \"newline\", \"string-length\", \"string-ref\",\n");
+    fprintf(ctx->output, "        \"number?\", \"boolean?\", \"string?\", \"symbol?\", \"pair?\", \"null?\", \"procedure?\",\n");
+    fprintf(ctx->output, "        NULL\n");
+    fprintf(ctx->output, "    };\n");
+    fprintf(ctx->output, "    for (int i = 0; builtins[i] != NULL; i++) {\n");
+    fprintf(ctx->output, "        if (strcmp(name, builtins[i]) == 0) return 1;\n");
+    fprintf(ctx->output, "    }\n");
+    fprintf(ctx->output, "    return 0;\n");
+    fprintf(ctx->output, "}\n\n");
+    
     fprintf(ctx->output, "SchemeObject* lookup_variable(const char* name) {\n");
     fprintf(ctx->output, "    for (int i = 0; i < var_count; i++) {\n");
     fprintf(ctx->output, "        if (strcmp(var_names[i], name) == 0) {\n");
     fprintf(ctx->output, "            return var_values[i];\n");
     fprintf(ctx->output, "        }\n");
     fprintf(ctx->output, "    }\n");
+    fprintf(ctx->output, "    // Check for built-in functions and return primitive objects\n");
+    fprintf(ctx->output, "    if (is_builtin_function(name)) {\n");
+    fprintf(ctx->output, "        SchemeObject* prim = malloc(sizeof(SchemeObject));\n");
+    fprintf(ctx->output, "        prim->type = SCHEME_PRIMITIVE;\n");
+    fprintf(ctx->output, "        return prim; // Return primitive for built-in functions\n");
+    fprintf(ctx->output, "    }\n");
+
     fprintf(ctx->output, "    return make_symbol(name); // Return symbol if not found\n");
     fprintf(ctx->output, "}\n\n");
     
@@ -1573,53 +1595,94 @@ void compile_lambda_function_call(SchemeObject* call_expr, SchemeObject* params,
     
     *offset += snprintf(lambda_code + *offset, max_size - *offset,
                        "    {\n");
-    *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                       "        SchemeObject* func = lookup_variable(\"%s\");\n", func_name);
     
-    if (arg_count > 0) {
+    // Check if this is a built-in arithmetic function we can handle directly
+    if (arg_count == 2 && (strcmp(func_name, "+") == 0 || strcmp(func_name, "-") == 0 || 
+                           strcmp(func_name, "*") == 0 || strcmp(func_name, "/") == 0)) {
+        // Handle built-in arithmetic functions directly
         *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                           "        SchemeObject* args_array[%d];\n", arg_count);
+                           "        SchemeObject* arg1;\n");
+        *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                           "        SchemeObject* arg2;\n");
         
-        // Compile arguments
+        // Compile first argument
         temp = cdr(call_expr);
-        for (int i = 0; i < arg_count; i++) {
-            if (temp && is_pair(temp)) {
-                SchemeObject* arg = car(temp);
-                *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                                   "        {\n");
-                *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                                   "            SchemeObject* arg_temp;\n");
-                compile_lambda_expression(arg, params, lambda_code, offset, max_size, "arg_temp");
-                *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                                   "            args_array[%d] = arg_temp;\n", i);
-                *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                                   "        }\n");
-                temp = cdr(temp);
-            }
+        if (temp && is_pair(temp)) {
+            SchemeObject* arg = car(temp);
+            compile_lambda_expression(arg, params, lambda_code, offset, max_size, "arg1");
+            temp = cdr(temp);
         }
         
-        *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                           "        if (func && is_procedure(func)) {\n");
-        *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                           "            result = call_procedure(func, args_array, %d);\n", arg_count);
-        *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                           "        } else {\n");
-        *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                           "            result = scheme_nil;\n");
-        *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                           "        }\n");
+        // Compile second argument
+        if (temp && is_pair(temp)) {
+            SchemeObject* arg = car(temp);
+            compile_lambda_expression(arg, params, lambda_code, offset, max_size, "arg2");
+        }
+        
+        // Generate the appropriate function call
+        if (strcmp(func_name, "+") == 0) {
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "        result = scheme_add(arg1, arg2);\n");
+        } else if (strcmp(func_name, "-") == 0) {
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "        result = scheme_subtract(arg1, arg2);\n");
+        } else if (strcmp(func_name, "*") == 0) {
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "        result = scheme_multiply(arg1, arg2);\n");
+        } else if (strcmp(func_name, "/") == 0) {
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "        result = scheme_divide(arg1, arg2);\n");
+        }
     } else {
-        // No arguments
+        // Handle user-defined functions and other built-ins through lookup_variable
         *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                           "        if (func && is_procedure(func)) {\n");
-        *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                           "            result = call_procedure(func, NULL, 0);\n");
-        *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                           "        } else {\n");
-        *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                           "            result = scheme_nil;\n");
-        *offset += snprintf(lambda_code + *offset, max_size - *offset,
-                           "        }\n");
+                           "        SchemeObject* func = lookup_variable(\"%s\");\n", func_name);
+        
+        if (arg_count > 0) {
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "        SchemeObject* args_array[%d];\n", arg_count);
+            
+            // Compile arguments
+            temp = cdr(call_expr);
+            for (int i = 0; i < arg_count; i++) {
+                if (temp && is_pair(temp)) {
+                    SchemeObject* arg = car(temp);
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "        {\n");
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "            SchemeObject* arg_temp;\n");
+                    compile_lambda_expression(arg, params, lambda_code, offset, max_size, "arg_temp");
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "            args_array[%d] = arg_temp;\n", i);
+                    *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                       "        }\n");
+                    temp = cdr(temp);
+                }
+            }
+            
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "        if (func && is_procedure(func)) {\n");
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "            result = call_procedure(func, args_array, %d);\n", arg_count);
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "        } else {\n");
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "            result = scheme_nil;\n");
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "        }\n");
+        } else {
+            // No arguments
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "        if (func && is_procedure(func)) {\n");
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "            result = call_procedure(func, NULL, 0);\n");
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "        } else {\n");
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "            result = scheme_nil;\n");
+            *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                               "        }\n");
+        }
     }
     
     *offset += snprintf(lambda_code + *offset, max_size - *offset,
@@ -1680,6 +1743,21 @@ void compile_lambda_expression(SchemeObject* expr, SchemeObject* params, char* l
                 compile_lambda_expression(arg2, params, lambda_code, offset, max_size, "temp2");
                 *offset += snprintf(lambda_code + *offset, max_size - *offset,
                                    "            %s = scheme_equal(temp1, temp2);\n", result_var);
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "        }\n");
+            } else if (strcmp(op_name, "+") == 0) {
+                SchemeObject* arg1 = car(cdr(expr));
+                SchemeObject* arg2 = car(cdr(cdr(expr)));
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "        {\n");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            SchemeObject* temp1;\n");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            SchemeObject* temp2;\n");
+                compile_lambda_expression(arg1, params, lambda_code, offset, max_size, "temp1");
+                compile_lambda_expression(arg2, params, lambda_code, offset, max_size, "temp2");
+                *offset += snprintf(lambda_code + *offset, max_size - *offset,
+                                   "            %s = scheme_add(temp1, temp2);\n", result_var);
                 *offset += snprintf(lambda_code + *offset, max_size - *offset,
                                    "        }\n");
             } else if (strcmp(op_name, "*") == 0) {
