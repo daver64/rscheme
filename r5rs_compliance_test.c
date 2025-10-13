@@ -372,6 +372,59 @@ SchemeObject* scheme_string_ref(SchemeObject* str, SchemeObject* index) {
     return scheme_nil;
 }
 
+SchemeObject* scheme_list_ref(SchemeObject* list, SchemeObject* index) {
+    if (!is_number(index)) return scheme_nil;
+    int idx = (int)index->value.number_value;
+    if (idx < 0) return scheme_nil;
+    SchemeObject* current = list;
+    for (int i = 0; i < idx && is_pair(current); i++) {
+        current = current->value.pair.cdr;
+    }
+    if (is_pair(current)) {
+        return current->value.pair.car;
+    }
+    return scheme_nil;
+}
+
+SchemeObject* scheme_append(SchemeObject* list1, SchemeObject* list2) {
+    if (is_nil(list1)) return list2;
+    if (is_nil(list2)) return list1;
+    if (!is_pair(list1)) return list2;
+    // Create a new list by copying list1 and appending list2
+    SchemeObject* result = scheme_nil;
+    SchemeObject* tail = NULL;
+    SchemeObject* current = list1;
+    // Copy all elements from list1
+    while (is_pair(current)) {
+        SchemeObject* new_pair = make_pair(current->value.pair.car, scheme_nil);
+        if (is_nil(result)) {
+            result = new_pair;
+            tail = new_pair;
+        } else {
+            tail->value.pair.cdr = new_pair;
+            tail = new_pair;
+        }
+        current = current->value.pair.cdr;
+    }
+    // Append list2 to the end
+    if (tail) {
+        tail->value.pair.cdr = list2;
+    } else {
+        result = list2;
+    }
+    return result;
+}
+
+SchemeObject* scheme_reverse(SchemeObject* list) {
+    SchemeObject* result = scheme_nil;
+    SchemeObject* current = list;
+    while (is_pair(current)) {
+        result = make_pair(current->value.pair.car, result);
+        current = current->value.pair.cdr;
+    }
+    return result;
+}
+
 SchemeObject* lookup_variable(const char* name) {
     for (int i = 0; i < var_count; i++) {
         if (strcmp(var_names[i], name) == 0) {
@@ -2706,13 +2759,9 @@ result = scheme_nil;
 
 // Display
 SchemeObject* temp_270;
-// Procedure call
+// list_ref
 SchemeObject* temp_271;
-result = lookup_variable("list-ref");
-temp_271 = result;
-if (temp_271 && temp_271->type == SCHEME_PROCEDURE) {
-    SchemeObject* proc_args[2];
-    SchemeObject* temp_272;
+SchemeObject* temp_272;
 // Quote
 // Building simple quoted list
 {
@@ -2729,16 +2778,10 @@ if (temp_271 && temp_271->type == SCHEME_PROCEDURE) {
     result = make_pair(elements[1], result);
     result = make_pair(elements[0], result);
 }
-    temp_272 = result;
-    proc_args[0] = temp_272;
-    SchemeObject* temp_273;
+temp_271 = result;
 result = make_number(2);
-    temp_273 = result;
-    proc_args[1] = temp_273;
-    result = temp_271->value.procedure.func(proc_args, 2);
-} else {
-    result = scheme_nil; // Not a procedure
-}
+temp_272 = result;
+result = scheme_list_ref(temp_271, temp_272);
 temp_270 = result;
 scheme_display(temp_270);
 result = scheme_nil;
@@ -2748,21 +2791,17 @@ printf("\n");
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_274;
+SchemeObject* temp_273;
 result = make_string("append (1 2) (3 4): ");
-temp_274 = result;
-scheme_display(temp_274);
+temp_273 = result;
+scheme_display(temp_273);
 result = scheme_nil;
 
 // Display
+SchemeObject* temp_274;
+// Append
 SchemeObject* temp_275;
-// Procedure call
 SchemeObject* temp_276;
-result = lookup_variable("append");
-temp_276 = result;
-if (temp_276 && temp_276->type == SCHEME_PROCEDURE) {
-    SchemeObject* proc_args[2];
-    SchemeObject* temp_277;
 // Quote
 // Building simple quoted list
 {
@@ -2773,9 +2812,7 @@ if (temp_276 && temp_276->type == SCHEME_PROCEDURE) {
     result = make_pair(elements[1], result);
     result = make_pair(elements[0], result);
 }
-    temp_277 = result;
-    proc_args[0] = temp_277;
-    SchemeObject* temp_278;
+temp_275 = result;
 // Quote
 // Building simple quoted list
 {
@@ -2786,14 +2823,10 @@ if (temp_276 && temp_276->type == SCHEME_PROCEDURE) {
     result = make_pair(elements[1], result);
     result = make_pair(elements[0], result);
 }
-    temp_278 = result;
-    proc_args[1] = temp_278;
-    result = temp_276->value.procedure.func(proc_args, 2);
-} else {
-    result = scheme_nil; // Not a procedure
-}
-temp_275 = result;
-scheme_display(temp_275);
+temp_276 = result;
+result = scheme_append(temp_275, temp_276);
+temp_274 = result;
+scheme_display(temp_274);
 result = scheme_nil;
 
 // Newline
@@ -2801,21 +2834,16 @@ printf("\n");
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_279;
+SchemeObject* temp_277;
 result = make_string("reverse (1 2 3 4): ");
-temp_279 = result;
-scheme_display(temp_279);
+temp_277 = result;
+scheme_display(temp_277);
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_280;
-// Procedure call
-SchemeObject* temp_281;
-result = lookup_variable("reverse");
-temp_281 = result;
-if (temp_281 && temp_281->type == SCHEME_PROCEDURE) {
-    SchemeObject* proc_args[1];
-    SchemeObject* temp_282;
+SchemeObject* temp_278;
+// reverse
+SchemeObject* temp_279;
 // Quote
 // Building simple quoted list
 {
@@ -2830,12 +2858,19 @@ if (temp_281 && temp_281->type == SCHEME_PROCEDURE) {
     result = make_pair(elements[1], result);
     result = make_pair(elements[0], result);
 }
-    temp_282 = result;
-    proc_args[0] = temp_282;
-    result = temp_281->value.procedure.func(proc_args, 1);
-} else {
-    result = scheme_nil; // Not a procedure
-}
+temp_279 = result;
+result = scheme_reverse(temp_279);
+temp_278 = result;
+scheme_display(temp_278);
+result = scheme_nil;
+
+// Newline
+printf("\n");
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_280;
+result = make_string("12. Testing String Operations");
 temp_280 = result;
 scheme_display(temp_280);
 result = scheme_nil;
@@ -2845,10 +2880,35 @@ printf("\n");
 result = scheme_nil;
 
 // Display
+SchemeObject* temp_281;
+result = make_string("string-length of ");
+temp_281 = result;
+scheme_display(temp_281);
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_282;
+result = make_string("hello");
+temp_282 = result;
+scheme_display(temp_282);
+result = scheme_nil;
+
+// Display
 SchemeObject* temp_283;
-result = make_string("12. Testing String Operations");
+result = make_string(": ");
 temp_283 = result;
 scheme_display(temp_283);
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_284;
+// string_length
+SchemeObject* temp_285;
+result = make_string("hello");
+temp_285 = result;
+result = scheme_string_length(temp_285);
+temp_284 = result;
+scheme_display(temp_284);
 result = scheme_nil;
 
 // Newline
@@ -2856,35 +2916,38 @@ printf("\n");
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_284;
-result = make_string("string-length of ");
-temp_284 = result;
-scheme_display(temp_284);
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_285;
-result = make_string("hello");
-temp_285 = result;
-scheme_display(temp_285);
-result = scheme_nil;
-
-// Display
 SchemeObject* temp_286;
-result = make_string(": ");
+result = make_string("string-ref ");
 temp_286 = result;
 scheme_display(temp_286);
 result = scheme_nil;
 
 // Display
 SchemeObject* temp_287;
-// string_length
-SchemeObject* temp_288;
 result = make_string("hello");
-temp_288 = result;
-result = scheme_string_length(temp_288);
 temp_287 = result;
 scheme_display(temp_287);
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_288;
+result = make_string(" 1: ");
+temp_288 = result;
+scheme_display(temp_288);
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_289;
+// string_ref
+SchemeObject* temp_290;
+SchemeObject* temp_291;
+result = make_string("hello");
+temp_290 = result;
+result = make_number(1);
+temp_291 = result;
+result = scheme_string_ref(temp_290, temp_291);
+temp_289 = result;
+scheme_display(temp_289);
 result = scheme_nil;
 
 // Newline
@@ -2892,36 +2955,8 @@ printf("\n");
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_289;
-result = make_string("string-ref ");
-temp_289 = result;
-scheme_display(temp_289);
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_290;
-result = make_string("hello");
-temp_290 = result;
-scheme_display(temp_290);
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_291;
-result = make_string(" 1: ");
-temp_291 = result;
-scheme_display(temp_291);
-result = scheme_nil;
-
-// Display
 SchemeObject* temp_292;
-// string_ref
-SchemeObject* temp_293;
-SchemeObject* temp_294;
-result = make_string("hello");
-temp_293 = result;
-result = make_number(1);
-temp_294 = result;
-result = scheme_string_ref(temp_293, temp_294);
+result = make_string("13. Testing Complex Expressions");
 temp_292 = result;
 scheme_display(temp_292);
 result = scheme_nil;
@@ -2931,52 +2966,41 @@ printf("\n");
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_295;
-result = make_string("13. Testing Complex Expressions");
-temp_295 = result;
-scheme_display(temp_295);
-result = scheme_nil;
-
-// Newline
-printf("\n");
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_296;
+SchemeObject* temp_293;
 result = make_string("Nested arithmetic: ");
-temp_296 = result;
-scheme_display(temp_296);
+temp_293 = result;
+scheme_display(temp_293);
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_297;
+SchemeObject* temp_294;
 // Arithmetic operation
+SchemeObject* temp_295;
+// Arithmetic operation
+SchemeObject* temp_296;
+result = make_number(2);
+temp_296 = result;
+SchemeObject* temp_297;
+result = make_number(3);
+temp_297 = result;
+temp_296 = scheme_multiply(temp_296, temp_297);
+result = temp_296;
+temp_295 = result;
 SchemeObject* temp_298;
 // Arithmetic operation
 SchemeObject* temp_299;
-result = make_number(2);
+result = make_number(7);
 temp_299 = result;
 SchemeObject* temp_300;
-result = make_number(3);
+result = make_number(2);
 temp_300 = result;
-temp_299 = scheme_multiply(temp_299, temp_300);
+temp_299 = scheme_subtract(temp_299, temp_300);
 result = temp_299;
 temp_298 = result;
-SchemeObject* temp_301;
-// Arithmetic operation
-SchemeObject* temp_302;
-result = make_number(7);
-temp_302 = result;
-SchemeObject* temp_303;
-result = make_number(2);
-temp_303 = result;
-temp_302 = scheme_subtract(temp_302, temp_303);
-result = temp_302;
-temp_301 = result;
-temp_298 = scheme_add(temp_298, temp_301);
-result = temp_298;
-temp_297 = result;
-scheme_display(temp_297);
+temp_295 = scheme_add(temp_295, temp_298);
+result = temp_295;
+temp_294 = result;
+scheme_display(temp_294);
 result = scheme_nil;
 
 // Newline
@@ -2984,69 +3008,69 @@ printf("\n");
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_304;
+SchemeObject* temp_301;
 result = make_string("Nested conditionals: ");
-temp_304 = result;
-scheme_display(temp_304);
+temp_301 = result;
+scheme_display(temp_301);
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_305;
+SchemeObject* temp_302;
 // if expression
-SchemeObject* temp_306;
+SchemeObject* temp_303;
 // Procedure call
-SchemeObject* temp_307;
+SchemeObject* temp_304;
 result = lookup_variable("and");
-temp_307 = result;
-if (temp_307 && temp_307->type == SCHEME_PROCEDURE) {
+temp_304 = result;
+if (temp_304 && temp_304->type == SCHEME_PROCEDURE) {
     SchemeObject* proc_args[2];
-    SchemeObject* temp_308;
+    SchemeObject* temp_305;
 // Comparison operation
-SchemeObject* temp_309;
+SchemeObject* temp_306;
 result = make_number(5);
-temp_309 = result;
-SchemeObject* temp_310;
+temp_306 = result;
+SchemeObject* temp_307;
 result = make_number(3);
-temp_310 = result;
-if (!is_true(scheme_greater(temp_309, temp_310))) {
+temp_307 = result;
+if (!is_true(scheme_greater(temp_306, temp_307))) {
     result = make_boolean(false);
     goto label_26;
 }
-temp_309 = temp_310;
+temp_306 = temp_307;
 result = make_boolean(true);
 label_26:;
-    temp_308 = result;
-    proc_args[0] = temp_308;
-    SchemeObject* temp_311;
+    temp_305 = result;
+    proc_args[0] = temp_305;
+    SchemeObject* temp_308;
 // Comparison operation
-SchemeObject* temp_312;
+SchemeObject* temp_309;
 result = make_number(2);
-temp_312 = result;
-SchemeObject* temp_313;
+temp_309 = result;
+SchemeObject* temp_310;
 result = make_number(4);
-temp_313 = result;
-if (!is_true(scheme_less(temp_312, temp_313))) {
+temp_310 = result;
+if (!is_true(scheme_less(temp_309, temp_310))) {
     result = make_boolean(false);
     goto label_27;
 }
-temp_312 = temp_313;
+temp_309 = temp_310;
 result = make_boolean(true);
 label_27:;
-    temp_311 = result;
-    proc_args[1] = temp_311;
-    result = temp_307->value.procedure.func(proc_args, 2);
+    temp_308 = result;
+    proc_args[1] = temp_308;
+    result = temp_304->value.procedure.func(proc_args, 2);
 } else {
     result = scheme_nil; // Not a procedure
 }
-temp_306 = result;
-if (!is_true(temp_306)) goto label_24;
+temp_303 = result;
+if (!is_true(temp_303)) goto label_24;
 result = make_string("both true");
 goto label_25;
 label_24:
 result = make_string("not both true");
 label_25:
-temp_305 = result;
-scheme_display(temp_305);
+temp_302 = result;
+scheme_display(temp_302);
 result = scheme_nil;
 
 // Newline
@@ -3065,28 +3089,39 @@ define_variable("compose-example", result);
 // Variable 'compose-example' defined
 
 // Display
-SchemeObject* temp_314;
+SchemeObject* temp_311;
 result = make_string("Compose example: ");
-temp_314 = result;
-scheme_display(temp_314);
+temp_311 = result;
+scheme_display(temp_311);
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_312;
+// Procedure call
+SchemeObject* temp_313;
+result = lookup_variable("compose-example");
+temp_313 = result;
+if (temp_313 && temp_313->type == SCHEME_PROCEDURE) {
+    SchemeObject* proc_args[1];
+    SchemeObject* temp_314;
+result = make_number(2);
+    temp_314 = result;
+    proc_args[0] = temp_314;
+    result = temp_313->value.procedure.func(proc_args, 1);
+} else {
+    result = scheme_nil; // Not a procedure
+}
+temp_312 = result;
+scheme_display(temp_312);
+result = scheme_nil;
+
+// Newline
+printf("\n");
 result = scheme_nil;
 
 // Display
 SchemeObject* temp_315;
-// Procedure call
-SchemeObject* temp_316;
-result = lookup_variable("compose-example");
-temp_316 = result;
-if (temp_316 && temp_316->type == SCHEME_PROCEDURE) {
-    SchemeObject* proc_args[1];
-    SchemeObject* temp_317;
-result = make_number(2);
-    temp_317 = result;
-    proc_args[0] = temp_317;
-    result = temp_316->value.procedure.func(proc_args, 1);
-} else {
-    result = scheme_nil; // Not a procedure
-}
+result = make_string("14. Testing Edge Cases");
 temp_315 = result;
 scheme_display(temp_315);
 result = scheme_nil;
@@ -3096,10 +3131,74 @@ printf("\n");
 result = scheme_nil;
 
 // Display
+SchemeObject* temp_316;
+result = make_string("Zero tests: ");
+temp_316 = result;
+scheme_display(temp_316);
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_317;
+// Arithmetic operation
 SchemeObject* temp_318;
-result = make_string("14. Testing Edge Cases");
+result = make_number(0);
 temp_318 = result;
-scheme_display(temp_318);
+SchemeObject* temp_319;
+result = make_number(0);
+temp_319 = result;
+temp_318 = scheme_add(temp_318, temp_319);
+result = temp_318;
+temp_317 = result;
+scheme_display(temp_317);
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_320;
+result = make_string(" ");
+temp_320 = result;
+scheme_display(temp_320);
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_321;
+// Arithmetic operation
+SchemeObject* temp_322;
+result = make_number(5);
+temp_322 = result;
+SchemeObject* temp_323;
+result = make_number(0);
+temp_323 = result;
+temp_322 = scheme_multiply(temp_322, temp_323);
+result = temp_322;
+temp_321 = result;
+scheme_display(temp_321);
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_324;
+result = make_string(" ");
+temp_324 = result;
+scheme_display(temp_324);
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_325;
+// Comparison operation
+SchemeObject* temp_326;
+result = make_number(0);
+temp_326 = result;
+SchemeObject* temp_327;
+result = make_number(0);
+temp_327 = result;
+if (!is_true(scheme_equal(temp_326, temp_327))) {
+    result = make_boolean(false);
+    goto label_28;
+}
+temp_326 = temp_327;
+result = make_boolean(true);
+label_28:;
+temp_325 = result;
+scheme_display(temp_325);
 result = scheme_nil;
 
 // Newline
@@ -3107,74 +3206,21 @@ printf("\n");
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_319;
-result = make_string("Zero tests: ");
-temp_319 = result;
-scheme_display(temp_319);
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_320;
-// Arithmetic operation
-SchemeObject* temp_321;
-result = make_number(0);
-temp_321 = result;
-SchemeObject* temp_322;
-result = make_number(0);
-temp_322 = result;
-temp_321 = scheme_add(temp_321, temp_322);
-result = temp_321;
-temp_320 = result;
-scheme_display(temp_320);
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_323;
-result = make_string(" ");
-temp_323 = result;
-scheme_display(temp_323);
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_324;
-// Arithmetic operation
-SchemeObject* temp_325;
-result = make_number(5);
-temp_325 = result;
-SchemeObject* temp_326;
-result = make_number(0);
-temp_326 = result;
-temp_325 = scheme_multiply(temp_325, temp_326);
-result = temp_325;
-temp_324 = result;
-scheme_display(temp_324);
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_327;
-result = make_string(" ");
-temp_327 = result;
-scheme_display(temp_327);
-result = scheme_nil;
-
-// Display
 SchemeObject* temp_328;
-// Comparison operation
-SchemeObject* temp_329;
-result = make_number(0);
-temp_329 = result;
-SchemeObject* temp_330;
-result = make_number(0);
-temp_330 = result;
-if (!is_true(scheme_equal(temp_329, temp_330))) {
-    result = make_boolean(false);
-    goto label_28;
-}
-temp_329 = temp_330;
-result = make_boolean(true);
-label_28:;
+result = make_string("Empty string length: ");
 temp_328 = result;
 scheme_display(temp_328);
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_329;
+// string_length
+SchemeObject* temp_330;
+result = make_string("");
+temp_330 = result;
+result = scheme_string_length(temp_330);
+temp_329 = result;
+scheme_display(temp_329);
 result = scheme_nil;
 
 // Newline
@@ -3183,34 +3229,35 @@ result = scheme_nil;
 
 // Display
 SchemeObject* temp_331;
-result = make_string("Empty string length: ");
+result = make_string("Single element list: ");
 temp_331 = result;
 scheme_display(temp_331);
 result = scheme_nil;
 
 // Display
 SchemeObject* temp_332;
-// string_length
-SchemeObject* temp_333;
-result = make_string("");
-temp_333 = result;
-result = scheme_string_length(temp_333);
+// Quote
+// Building simple quoted list
+{
+    SchemeObject* elements[1];
+    elements[0] = make_symbol("only");
+    result = scheme_nil;
+    result = make_pair(elements[0], result);
+}
 temp_332 = result;
 scheme_display(temp_332);
 result = scheme_nil;
 
-// Newline
-printf("\n");
+// Display
+SchemeObject* temp_333;
+result = make_string(" car: ");
+temp_333 = result;
+scheme_display(temp_333);
 result = scheme_nil;
 
 // Display
 SchemeObject* temp_334;
-result = make_string("Single element list: ");
-temp_334 = result;
-scheme_display(temp_334);
-result = scheme_nil;
-
-// Display
+// car
 SchemeObject* temp_335;
 // Quote
 // Building simple quoted list
@@ -3221,30 +3268,57 @@ SchemeObject* temp_335;
     result = make_pair(elements[0], result);
 }
 temp_335 = result;
-scheme_display(temp_335);
+result = scheme_car(temp_335);
+temp_334 = result;
+scheme_display(temp_334);
+result = scheme_nil;
+
+// Newline
+printf("\n");
 result = scheme_nil;
 
 // Display
 SchemeObject* temp_336;
-result = make_string(" car: ");
+result = make_string("Deeply nested: ");
 temp_336 = result;
 scheme_display(temp_336);
 result = scheme_nil;
 
 // Display
 SchemeObject* temp_337;
-// car
+// Arithmetic operation
 SchemeObject* temp_338;
-// Quote
-// Building simple quoted list
-{
-    SchemeObject* elements[1];
-    elements[0] = make_symbol("only");
-    result = scheme_nil;
-    result = make_pair(elements[0], result);
-}
+result = make_number(1);
 temp_338 = result;
-result = scheme_car(temp_338);
+SchemeObject* temp_339;
+// Arithmetic operation
+SchemeObject* temp_340;
+result = make_number(2);
+temp_340 = result;
+SchemeObject* temp_341;
+// Arithmetic operation
+SchemeObject* temp_342;
+result = make_number(3);
+temp_342 = result;
+SchemeObject* temp_343;
+// Arithmetic operation
+SchemeObject* temp_344;
+result = make_number(4);
+temp_344 = result;
+SchemeObject* temp_345;
+result = make_number(5);
+temp_345 = result;
+temp_344 = scheme_add(temp_344, temp_345);
+result = temp_344;
+temp_343 = result;
+temp_342 = scheme_add(temp_342, temp_343);
+result = temp_342;
+temp_341 = result;
+temp_340 = scheme_add(temp_340, temp_341);
+result = temp_340;
+temp_339 = result;
+temp_338 = scheme_add(temp_338, temp_339);
+result = temp_338;
 temp_337 = result;
 scheme_display(temp_337);
 result = scheme_nil;
@@ -3254,49 +3328,41 @@ printf("\n");
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_339;
-result = make_string("Deeply nested: ");
-temp_339 = result;
-scheme_display(temp_339);
+SchemeObject* temp_346;
+result = make_string("15. Testing Quoting");
+temp_346 = result;
+scheme_display(temp_346);
+result = scheme_nil;
+
+// Newline
+printf("\n");
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_340;
-// Arithmetic operation
-SchemeObject* temp_341;
-result = make_number(1);
-temp_341 = result;
-SchemeObject* temp_342;
-// Arithmetic operation
-SchemeObject* temp_343;
-result = make_number(2);
-temp_343 = result;
-SchemeObject* temp_344;
-// Arithmetic operation
-SchemeObject* temp_345;
-result = make_number(3);
-temp_345 = result;
-SchemeObject* temp_346;
-// Arithmetic operation
 SchemeObject* temp_347;
-result = make_number(4);
+result = make_string("Quoted list: ");
 temp_347 = result;
+scheme_display(temp_347);
+result = scheme_nil;
+
+// Display
 SchemeObject* temp_348;
-result = make_number(5);
+// Quote
+// Building simple quoted list
+{
+    SchemeObject* elements[4];
+    elements[0] = make_symbol("+");
+    elements[1] = make_number(1);
+    elements[2] = make_number(2);
+    elements[3] = make_number(3);
+    result = scheme_nil;
+    result = make_pair(elements[3], result);
+    result = make_pair(elements[2], result);
+    result = make_pair(elements[1], result);
+    result = make_pair(elements[0], result);
+}
 temp_348 = result;
-temp_347 = scheme_add(temp_347, temp_348);
-result = temp_347;
-temp_346 = result;
-temp_345 = scheme_add(temp_345, temp_346);
-result = temp_345;
-temp_344 = result;
-temp_343 = scheme_add(temp_343, temp_344);
-result = temp_343;
-temp_342 = result;
-temp_341 = scheme_add(temp_341, temp_342);
-result = temp_341;
-temp_340 = result;
-scheme_display(temp_340);
+scheme_display(temp_348);
 result = scheme_nil;
 
 // Newline
@@ -3305,24 +3371,39 @@ result = scheme_nil;
 
 // Display
 SchemeObject* temp_349;
-result = make_string("15. Testing Quoting");
+result = make_string("Evaluated: ");
 temp_349 = result;
 scheme_display(temp_349);
 result = scheme_nil;
 
-// Newline
-printf("\n");
-result = scheme_nil;
-
 // Display
 SchemeObject* temp_350;
-result = make_string("Quoted list: ");
+// Arithmetic operation
+SchemeObject* temp_351;
+result = make_number(1);
+temp_351 = result;
+SchemeObject* temp_352;
+result = make_number(2);
+temp_352 = result;
+temp_351 = scheme_add(temp_351, temp_352);
+SchemeObject* temp_353;
+result = make_number(3);
+temp_353 = result;
+temp_351 = scheme_add(temp_351, temp_353);
+result = temp_351;
 temp_350 = result;
 scheme_display(temp_350);
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_351;
+SchemeObject* temp_354;
+result = make_string(" Quoted: ");
+temp_354 = result;
+scheme_display(temp_354);
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_355;
 // Quote
 // Building simple quoted list
 {
@@ -3337,8 +3418,8 @@ SchemeObject* temp_351;
     result = make_pair(elements[1], result);
     result = make_pair(elements[0], result);
 }
-temp_351 = result;
-scheme_display(temp_351);
+temp_355 = result;
+scheme_display(temp_355);
 result = scheme_nil;
 
 // Newline
@@ -3346,78 +3427,21 @@ printf("\n");
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_352;
-result = make_string("Evaluated: ");
-temp_352 = result;
-scheme_display(temp_352);
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_353;
-// Arithmetic operation
-SchemeObject* temp_354;
-result = make_number(1);
-temp_354 = result;
-SchemeObject* temp_355;
-result = make_number(2);
-temp_355 = result;
-temp_354 = scheme_add(temp_354, temp_355);
 SchemeObject* temp_356;
-result = make_number(3);
+result = make_string("Nested quotes: ");
 temp_356 = result;
-temp_354 = scheme_add(temp_354, temp_356);
-result = temp_354;
-temp_353 = result;
-scheme_display(temp_353);
+scheme_display(temp_356);
 result = scheme_nil;
 
 // Display
 SchemeObject* temp_357;
-result = make_string(" Quoted: ");
-temp_357 = result;
-scheme_display(temp_357);
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_358;
-// Quote
-// Building simple quoted list
-{
-    SchemeObject* elements[4];
-    elements[0] = make_symbol("+");
-    elements[1] = make_number(1);
-    elements[2] = make_number(2);
-    elements[3] = make_number(3);
-    result = scheme_nil;
-    result = make_pair(elements[3], result);
-    result = make_pair(elements[2], result);
-    result = make_pair(elements[1], result);
-    result = make_pair(elements[0], result);
-}
-temp_358 = result;
-scheme_display(temp_358);
-result = scheme_nil;
-
-// Newline
-printf("\n");
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_359;
-result = make_string("Nested quotes: ");
-temp_359 = result;
-scheme_display(temp_359);
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_360;
 // Quote
 {
     SchemeObject* car_part;
     SchemeObject* cdr_part;
     // Compile car of pair
     {
-        SchemeObject* temp_result_361;
+        SchemeObject* temp_result_358;
         car_part = scheme_nil; // Complex quoted value
     }
     // Compile cdr of pair
@@ -3426,6 +3450,17 @@ SchemeObject* temp_360;
     }
     result = make_pair(car_part, cdr_part);
 }
+temp_357 = result;
+scheme_display(temp_357);
+result = scheme_nil;
+
+// Newline
+printf("\n");
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_360;
+result = make_string("=== R5RS Compliance Test Complete ===");
 temp_360 = result;
 scheme_display(temp_360);
 result = scheme_nil;
@@ -3435,43 +3470,32 @@ printf("\n");
 result = scheme_nil;
 
 // Display
+SchemeObject* temp_361;
+result = make_string("If you see this message, the R5RS Scheme implementation");
+temp_361 = result;
+scheme_display(temp_361);
+result = scheme_nil;
+
+// Newline
+printf("\n");
+result = scheme_nil;
+
+// Display
+SchemeObject* temp_362;
+result = make_string("successfully processed all major language features!");
+temp_362 = result;
+scheme_display(temp_362);
+result = scheme_nil;
+
+// Newline
+printf("\n");
+result = scheme_nil;
+
+// Display
 SchemeObject* temp_363;
-result = make_string("=== R5RS Compliance Test Complete ===");
+result = make_string("Test completed successfully.");
 temp_363 = result;
 scheme_display(temp_363);
-result = scheme_nil;
-
-// Newline
-printf("\n");
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_364;
-result = make_string("If you see this message, the R5RS Scheme implementation");
-temp_364 = result;
-scheme_display(temp_364);
-result = scheme_nil;
-
-// Newline
-printf("\n");
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_365;
-result = make_string("successfully processed all major language features!");
-temp_365 = result;
-scheme_display(temp_365);
-result = scheme_nil;
-
-// Newline
-printf("\n");
-result = scheme_nil;
-
-// Display
-SchemeObject* temp_366;
-result = make_string("Test completed successfully.");
-temp_366 = result;
-scheme_display(temp_366);
 result = scheme_nil;
 
 // Newline

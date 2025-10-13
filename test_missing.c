@@ -372,6 +372,59 @@ SchemeObject* scheme_string_ref(SchemeObject* str, SchemeObject* index) {
     return scheme_nil;
 }
 
+SchemeObject* scheme_list_ref(SchemeObject* list, SchemeObject* index) {
+    if (!is_number(index)) return scheme_nil;
+    int idx = (int)index->value.number_value;
+    if (idx < 0) return scheme_nil;
+    SchemeObject* current = list;
+    for (int i = 0; i < idx && is_pair(current); i++) {
+        current = current->value.pair.cdr;
+    }
+    if (is_pair(current)) {
+        return current->value.pair.car;
+    }
+    return scheme_nil;
+}
+
+SchemeObject* scheme_append(SchemeObject* list1, SchemeObject* list2) {
+    if (is_nil(list1)) return list2;
+    if (is_nil(list2)) return list1;
+    if (!is_pair(list1)) return list2;
+    // Create a new list by copying list1 and appending list2
+    SchemeObject* result = scheme_nil;
+    SchemeObject* tail = NULL;
+    SchemeObject* current = list1;
+    // Copy all elements from list1
+    while (is_pair(current)) {
+        SchemeObject* new_pair = make_pair(current->value.pair.car, scheme_nil);
+        if (is_nil(result)) {
+            result = new_pair;
+            tail = new_pair;
+        } else {
+            tail->value.pair.cdr = new_pair;
+            tail = new_pair;
+        }
+        current = current->value.pair.cdr;
+    }
+    // Append list2 to the end
+    if (tail) {
+        tail->value.pair.cdr = list2;
+    } else {
+        result = list2;
+    }
+    return result;
+}
+
+SchemeObject* scheme_reverse(SchemeObject* list) {
+    SchemeObject* result = scheme_nil;
+    SchemeObject* current = list;
+    while (is_pair(current)) {
+        result = make_pair(current->value.pair.car, result);
+        current = current->value.pair.cdr;
+    }
+    return result;
+}
+
 SchemeObject* lookup_variable(const char* name) {
     for (int i = 0; i < var_count; i++) {
         if (strcmp(var_names[i], name) == 0) {
@@ -445,13 +498,9 @@ result = scheme_nil;
 
 // Display
 SchemeObject* temp_2;
-// Procedure call
+// list_ref
 SchemeObject* temp_3;
-result = lookup_variable("list-ref");
-temp_3 = result;
-if (temp_3 && temp_3->type == SCHEME_PROCEDURE) {
-    SchemeObject* proc_args[2];
-    SchemeObject* temp_4;
+SchemeObject* temp_4;
 // Quote
 // Building simple quoted list
 {
@@ -468,25 +517,19 @@ if (temp_3 && temp_3->type == SCHEME_PROCEDURE) {
     result = make_pair(elements[1], result);
     result = make_pair(elements[0], result);
 }
-    temp_4 = result;
-    proc_args[0] = temp_4;
-    SchemeObject* temp_5;
+temp_3 = result;
 result = make_number(2);
-    temp_5 = result;
-    proc_args[1] = temp_5;
-    result = temp_3->value.procedure.func(proc_args, 2);
-} else {
-    result = scheme_nil; // Not a procedure
-}
+temp_4 = result;
+result = scheme_list_ref(temp_3, temp_4);
 temp_2 = result;
 scheme_display(temp_2);
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_6;
+SchemeObject* temp_5;
 result = make_string(" (should be c)");
-temp_6 = result;
-scheme_display(temp_6);
+temp_5 = result;
+scheme_display(temp_5);
 result = scheme_nil;
 
 // Newline
@@ -494,21 +537,17 @@ printf("\n");
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_7;
+SchemeObject* temp_6;
 result = make_string("append test: ");
-temp_7 = result;
-scheme_display(temp_7);
+temp_6 = result;
+scheme_display(temp_6);
 result = scheme_nil;
 
 // Display
+SchemeObject* temp_7;
+// Append
 SchemeObject* temp_8;
-// Procedure call
 SchemeObject* temp_9;
-result = lookup_variable("append");
-temp_9 = result;
-if (temp_9 && temp_9->type == SCHEME_PROCEDURE) {
-    SchemeObject* proc_args[2];
-    SchemeObject* temp_10;
 // Quote
 // Building simple quoted list
 {
@@ -519,9 +558,7 @@ if (temp_9 && temp_9->type == SCHEME_PROCEDURE) {
     result = make_pair(elements[1], result);
     result = make_pair(elements[0], result);
 }
-    temp_10 = result;
-    proc_args[0] = temp_10;
-    SchemeObject* temp_11;
+temp_8 = result;
 // Quote
 // Building simple quoted list
 {
@@ -532,21 +569,17 @@ if (temp_9 && temp_9->type == SCHEME_PROCEDURE) {
     result = make_pair(elements[1], result);
     result = make_pair(elements[0], result);
 }
-    temp_11 = result;
-    proc_args[1] = temp_11;
-    result = temp_9->value.procedure.func(proc_args, 2);
-} else {
-    result = scheme_nil; // Not a procedure
-}
-temp_8 = result;
-scheme_display(temp_8);
+temp_9 = result;
+result = scheme_append(temp_8, temp_9);
+temp_7 = result;
+scheme_display(temp_7);
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_12;
+SchemeObject* temp_10;
 result = make_string(" (should be (1 2 3 4))");
-temp_12 = result;
-scheme_display(temp_12);
+temp_10 = result;
+scheme_display(temp_10);
 result = scheme_nil;
 
 // Newline
@@ -554,21 +587,16 @@ printf("\n");
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_13;
+SchemeObject* temp_11;
 result = make_string("reverse test: ");
-temp_13 = result;
-scheme_display(temp_13);
+temp_11 = result;
+scheme_display(temp_11);
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_14;
-// Procedure call
-SchemeObject* temp_15;
-result = lookup_variable("reverse");
-temp_15 = result;
-if (temp_15 && temp_15->type == SCHEME_PROCEDURE) {
-    SchemeObject* proc_args[1];
-    SchemeObject* temp_16;
+SchemeObject* temp_12;
+// reverse
+SchemeObject* temp_13;
 // Quote
 // Building simple quoted list
 {
@@ -583,21 +611,17 @@ if (temp_15 && temp_15->type == SCHEME_PROCEDURE) {
     result = make_pair(elements[1], result);
     result = make_pair(elements[0], result);
 }
-    temp_16 = result;
-    proc_args[0] = temp_16;
-    result = temp_15->value.procedure.func(proc_args, 1);
-} else {
-    result = scheme_nil; // Not a procedure
-}
-temp_14 = result;
-scheme_display(temp_14);
+temp_13 = result;
+result = scheme_reverse(temp_13);
+temp_12 = result;
+scheme_display(temp_12);
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_17;
+SchemeObject* temp_14;
 result = make_string(" (should be (4 3 2 1))");
-temp_17 = result;
-scheme_display(temp_17);
+temp_14 = result;
+scheme_display(temp_14);
 result = scheme_nil;
 
 // Newline
@@ -605,16 +629,16 @@ printf("\n");
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_18;
+SchemeObject* temp_15;
 result = make_string("procedure? on lambda: ");
-temp_18 = result;
-scheme_display(temp_18);
+temp_15 = result;
+scheme_display(temp_15);
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_19;
+SchemeObject* temp_16;
 // procedure_p
-SchemeObject* temp_20;
+SchemeObject* temp_17;
 // Lambda expression
 // Compiling lambda - collecting function
 // Compiling lambda - collecting function
@@ -622,17 +646,17 @@ SchemeObject* temp_20;
 // Extracted body operator: *
 // Lambda function collected successfully
 result = make_compiled_procedure(lambda_func_0, 1, "lambda_func_0");
-temp_20 = result;
-result = scheme_procedure_p(temp_20);
-temp_19 = result;
-scheme_display(temp_19);
+temp_17 = result;
+result = scheme_procedure_p(temp_17);
+temp_16 = result;
+scheme_display(temp_16);
 result = scheme_nil;
 
 // Display
-SchemeObject* temp_21;
+SchemeObject* temp_18;
 result = make_string(" (should be #t)");
-temp_21 = result;
-scheme_display(temp_21);
+temp_18 = result;
+scheme_display(temp_18);
 result = scheme_nil;
 
 // Newline

@@ -11,6 +11,7 @@ void compile_quoted_expression(SchemeObject* expr, CompilerContext* ctx);
 bool is_simple_list(SchemeObject* expr);
 void compile_simple_quoted_list(SchemeObject* list_expr, CompilerContext* ctx);
 void compile_quoted_value_to_variable(SchemeObject* expr, CompilerContext* ctx, int temp_var, const char* var_name);
+void compile_append(SchemeObject* operands, CompilerContext* ctx);
 
 CompilerContext* create_compiler_context(FILE* output, Environment* env, bool optimize) {
     CompilerContext* ctx = (CompilerContext*)scheme_malloc(sizeof(CompilerContext));
@@ -461,6 +462,59 @@ void generate_runtime_functions(CompilerContext* ctx) {
     fprintf(ctx->output, "    return scheme_nil;\n");
     fprintf(ctx->output, "}\n\n");
     
+    fprintf(ctx->output, "SchemeObject* scheme_list_ref(SchemeObject* list, SchemeObject* index) {\n");
+    fprintf(ctx->output, "    if (!is_number(index)) return scheme_nil;\n");
+    fprintf(ctx->output, "    int idx = (int)index->value.number_value;\n");
+    fprintf(ctx->output, "    if (idx < 0) return scheme_nil;\n");
+    fprintf(ctx->output, "    SchemeObject* current = list;\n");
+    fprintf(ctx->output, "    for (int i = 0; i < idx && is_pair(current); i++) {\n");
+    fprintf(ctx->output, "        current = current->value.pair.cdr;\n");
+    fprintf(ctx->output, "    }\n");
+    fprintf(ctx->output, "    if (is_pair(current)) {\n");
+    fprintf(ctx->output, "        return current->value.pair.car;\n");
+    fprintf(ctx->output, "    }\n");
+    fprintf(ctx->output, "    return scheme_nil;\n");
+    fprintf(ctx->output, "}\n\n");
+    
+    fprintf(ctx->output, "SchemeObject* scheme_append(SchemeObject* list1, SchemeObject* list2) {\n");
+    fprintf(ctx->output, "    if (is_nil(list1)) return list2;\n");
+    fprintf(ctx->output, "    if (is_nil(list2)) return list1;\n");
+    fprintf(ctx->output, "    if (!is_pair(list1)) return list2;\n");
+    fprintf(ctx->output, "    // Create a new list by copying list1 and appending list2\n");
+    fprintf(ctx->output, "    SchemeObject* result = scheme_nil;\n");
+    fprintf(ctx->output, "    SchemeObject* tail = NULL;\n");
+    fprintf(ctx->output, "    SchemeObject* current = list1;\n");
+    fprintf(ctx->output, "    // Copy all elements from list1\n");
+    fprintf(ctx->output, "    while (is_pair(current)) {\n");
+    fprintf(ctx->output, "        SchemeObject* new_pair = make_pair(current->value.pair.car, scheme_nil);\n");
+    fprintf(ctx->output, "        if (is_nil(result)) {\n");
+    fprintf(ctx->output, "            result = new_pair;\n");
+    fprintf(ctx->output, "            tail = new_pair;\n");
+    fprintf(ctx->output, "        } else {\n");
+    fprintf(ctx->output, "            tail->value.pair.cdr = new_pair;\n");
+    fprintf(ctx->output, "            tail = new_pair;\n");
+    fprintf(ctx->output, "        }\n");
+    fprintf(ctx->output, "        current = current->value.pair.cdr;\n");
+    fprintf(ctx->output, "    }\n");
+    fprintf(ctx->output, "    // Append list2 to the end\n");
+    fprintf(ctx->output, "    if (tail) {\n");
+    fprintf(ctx->output, "        tail->value.pair.cdr = list2;\n");
+    fprintf(ctx->output, "    } else {\n");
+    fprintf(ctx->output, "        result = list2;\n");
+    fprintf(ctx->output, "    }\n");
+    fprintf(ctx->output, "    return result;\n");
+    fprintf(ctx->output, "}\n\n");
+    
+    fprintf(ctx->output, "SchemeObject* scheme_reverse(SchemeObject* list) {\n");
+    fprintf(ctx->output, "    SchemeObject* result = scheme_nil;\n");
+    fprintf(ctx->output, "    SchemeObject* current = list;\n");
+    fprintf(ctx->output, "    while (is_pair(current)) {\n");
+    fprintf(ctx->output, "        result = make_pair(current->value.pair.car, result);\n");
+    fprintf(ctx->output, "        current = current->value.pair.cdr;\n");
+    fprintf(ctx->output, "    }\n");
+    fprintf(ctx->output, "    return result;\n");
+    fprintf(ctx->output, "}\n\n");
+    
     fprintf(ctx->output, "SchemeObject* lookup_variable(const char* name) {\n");
     fprintf(ctx->output, "    for (int i = 0; i < var_count; i++) {\n");
     fprintf(ctx->output, "        if (strcmp(var_names[i], name) == 0) {\n");
@@ -660,6 +714,15 @@ void compile_application(SchemeObject* expr, CompilerContext* ctx) {
             return;
         } else if (strcmp(name, "string-ref") == 0) {
             compile_two_arg_builtin(operands, ctx, "string_ref");
+            return;
+        } else if (strcmp(name, "list-ref") == 0) {
+            compile_two_arg_builtin(operands, ctx, "list_ref");
+            return;
+        } else if (strcmp(name, "append") == 0) {
+            compile_append(operands, ctx);
+            return;
+        } else if (strcmp(name, "reverse") == 0) {
+            compile_single_arg_builtin(operands, ctx, "reverse");
             return;
         }
     }
@@ -1791,6 +1854,44 @@ void compile_begin(SchemeObject* args, CompilerContext* ctx) {
 
 void optimize_dead_code(SchemeObject* expr) {
     (void)expr;
+}
+
+void compile_append(SchemeObject* operands, CompilerContext* ctx) {
+    emit_comment(ctx, "Append");
+    
+    if (!operands || is_nil(operands)) {
+        emit_line(ctx, "result = scheme_nil;");
+        return;
+    }
+    
+    SchemeObject* first_arg = car(operands);
+    SchemeObject* rest_args = cdr(operands);
+    
+    if (!rest_args || is_nil(rest_args)) {
+        // Single argument - just return it
+        compile_expression(first_arg, ctx);
+        return;
+    }
+    
+    SchemeObject* second_arg = car(rest_args);
+    
+    // For now, handle only two arguments (most common case)
+    char* temp1 = generate_temp_var(ctx);
+    char* temp2 = generate_temp_var(ctx);
+    
+    emit_line(ctx, "SchemeObject* %s;", temp1);
+    emit_line(ctx, "SchemeObject* %s;", temp2);
+    
+    compile_expression(first_arg, ctx);
+    emit_line(ctx, "%s = result;", temp1);
+    
+    compile_expression(second_arg, ctx);
+    emit_line(ctx, "%s = result;", temp2);
+    
+    emit_line(ctx, "result = scheme_append(%s, %s);", temp1, temp2);
+    
+    scheme_free(temp1);
+    scheme_free(temp2);
 }
 
 void emit_lambda_functions(CompilerContext* ctx) {
