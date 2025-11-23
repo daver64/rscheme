@@ -113,13 +113,12 @@ static void run_interpreter_mode(AppContext* ctx) {
         fseek(file, 0, SEEK_SET);
         
         char* content = (char*)scheme_malloc(length + 1);
-        fread(content, 1, length, file);
-        content[length] = '\0';
+        size_t bytes_read = fread(content, 1, length, file);
+        content[bytes_read] = '\0';
         fclose(file);
         
         // Parse and evaluate
         Parser* parser = create_parser(content);
-        bool file_execution_successful = true;
         
         while (true) {
             clear_eval_error();
@@ -127,7 +126,6 @@ static void run_interpreter_mode(AppContext* ctx) {
             
             if (has_parse_error(parser)) {
                 print_parse_error(parser, stderr);
-                file_execution_successful = false;
                 break;
             }
             
@@ -139,7 +137,6 @@ static void run_interpreter_mode(AppContext* ctx) {
             
             if (has_eval_error()) {
                 print_eval_error(stderr);
-                file_execution_successful = false;
                 break;
             }
             
@@ -176,7 +173,17 @@ static void run_compiler_mode(AppContext* ctx) {
     bool allocated_output = false;
     
     if (ctx->output_file) {
-        output_file = (char*)ctx->output_file;
+        // Check if output file has .c extension, add it if not
+        const char* ext = strrchr(ctx->output_file, '.');
+        if (!ext || strcmp(ext, ".c") != 0) {
+            size_t len = strlen(ctx->output_file);
+            output_file = (char*)scheme_malloc(len + 3); // +2 for ".c" +1 for null
+            strcpy(output_file, ctx->output_file);
+            strcpy(output_file + len, ".c");
+            allocated_output = true;
+        } else {
+            output_file = (char*)ctx->output_file;
+        }
     } else {
         // Replace .scm extension with .c
         const char* ext = strrchr(ctx->input_file, '.');
@@ -201,9 +208,15 @@ static void run_compiler_mode(AppContext* ctx) {
         const char* c_ext = strrchr(output_file, '.');
         size_t exe_base_len = c_ext ? (size_t)(c_ext - output_file) : strlen(output_file);
         
-        exe_file = (char*)scheme_malloc(exe_base_len + 5); // +4 for ".exe" +1 for null
-        strncpy(exe_file, output_file, exe_base_len);
-        strcpy(exe_file + exe_base_len, ".exe");
+        #ifdef _WIN32
+            exe_file = (char*)scheme_malloc(exe_base_len + 5); // +4 for ".exe" +1 for null
+            strncpy(exe_file, output_file, exe_base_len);
+            strcpy(exe_file + exe_base_len, ".exe");
+        #else
+            exe_file = (char*)scheme_malloc(exe_base_len + 1); // +1 for null
+            strncpy(exe_file, output_file, exe_base_len);
+            exe_file[exe_base_len] = '\0';
+        #endif
         allocated_exe = true;
         
         // Build C compiler command
@@ -268,10 +281,6 @@ int rscheme_main(int argc, char* argv[]) {
     
     // Create global environment
     ctx->global_env = make_global_environment();
-    
-    // Test basic object creation
-    SchemeObject* test_num = make_number(42.0);
-    SchemeObject* test_sym = make_symbol("test");
     
     if (ctx->verbose) {
         print_version();

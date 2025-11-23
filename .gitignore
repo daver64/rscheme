@@ -2,6 +2,9 @@ rscheme.pdb
 *.exe
 *.dll
 *.pdb
-
+r5rs_test
+r5rs_test.c
+r5rs_compliance_test.c
 build/
 bin/
+rscheme

@@ -8,7 +8,7 @@ static struct {
     size_t allocated_memory;
     size_t object_count;
     bool gc_enabled;
-    SchemeObject** gc_roots;
+    SchemeObject*** gc_roots;
     size_t gc_root_count;
     size_t gc_root_capacity;
 } runtime_state = {0};
@@ -99,8 +99,8 @@ void print_memory_stats(FILE* out) {
 
 void gc_init(void) {
     runtime_state.gc_root_capacity = 16;
-    runtime_state.gc_roots = (SchemeObject**)scheme_malloc(
-        runtime_state.gc_root_capacity * sizeof(SchemeObject*));
+    runtime_state.gc_roots = (SchemeObject***)scheme_malloc(
+        runtime_state.gc_root_capacity * sizeof(SchemeObject**));
     runtime_state.gc_root_count = 0;
 }
 
@@ -116,9 +116,9 @@ void gc_cleanup(void) {
 void gc_add_root(SchemeObject** root) {
     if (runtime_state.gc_root_count >= runtime_state.gc_root_capacity) {
         runtime_state.gc_root_capacity *= 2;
-        runtime_state.gc_roots = (SchemeObject**)scheme_realloc(
+        runtime_state.gc_roots = (SchemeObject***)scheme_realloc(
             runtime_state.gc_roots,
-            runtime_state.gc_root_capacity * sizeof(SchemeObject*));
+            runtime_state.gc_root_capacity * sizeof(SchemeObject**));
     }
     runtime_state.gc_roots[runtime_state.gc_root_count++] = root;
 }
@@ -211,6 +211,6 @@ SchemeObject* make_compiled_procedure(SchemeObject* (*func)(SchemeObject**, int)
     SchemeObject* proc = make_procedure(NULL, NULL, NULL);  // Use existing constructor
     proc->value.procedure.func = func;
     proc->value.procedure.arity = arity;
-    proc->value.procedure.name = _strdup(name);
+    proc->value.procedure.name = strdup(name);
     return proc;
 }

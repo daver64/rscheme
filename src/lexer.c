@@ -31,14 +31,6 @@ static char current_char(Lexer* lexer) {
     return lexer->input[lexer->position];
 }
 
-static char peek_char(Lexer* lexer, size_t offset) {
-    size_t pos = lexer->position + offset;
-    if (pos >= lexer->length) {
-        return '\0';
-    }
-    return lexer->input[pos];
-}
-
 static void advance_char(Lexer* lexer) {
     if (lexer->position < lexer->length) {
         if (lexer->input[lexer->position] == '\n') {

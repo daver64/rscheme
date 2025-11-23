@@ -897,8 +897,8 @@ bool compile_file(const char* input_file, const char* output_file, bool optimize
     fseek(input, 0, SEEK_SET);
     
     char* content = (char*)scheme_malloc(length + 1);
-    fread(content, 1, length, input);
-    content[length] = '\0';
+    size_t bytes_read = fread(content, 1, length, input);
+    content[bytes_read] = '\0';
     fclose(input);
     
     // Parse all expressions
@@ -1322,7 +1322,7 @@ void compile_simple_quoted_list(SchemeObject* list_expr, CompilerContext* ctx) {
 }
 
 // Helper function to compile a quoted value to a specific variable
-void compile_quoted_value_to_variable(SchemeObject* expr, CompilerContext* ctx, int temp_var, const char* var_name) {
+void compile_quoted_value_to_variable(SchemeObject* expr, CompilerContext* ctx, int temp_var __attribute__((unused)), const char* var_name) {
     if (!expr || is_nil(expr)) {
         emit_line(ctx, "        %s = scheme_nil;", var_name);
     } else if (is_number(expr)) {
@@ -1503,8 +1503,8 @@ void compile_lambda(SchemeObject* args, CompilerContext* ctx) {
     
     // Store the lambda function for later emission
     LambdaFunction* lambda_func = malloc(sizeof(LambdaFunction));
-    lambda_func->name = _strdup(func_name);
-    lambda_func->code = _strdup(lambda_code);
+    lambda_func->name = strdup(func_name);
+    lambda_func->code = strdup(lambda_code);
     lambda_func->next = ctx->lambda_functions;
     ctx->lambda_functions = lambda_func;
     

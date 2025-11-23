@@ -7,7 +7,7 @@ SchemeObject* SCHEME_TRUE_OBJECT = NULL;
 SchemeObject* SCHEME_FALSE_OBJECT = NULL;
 
 // Object allocation tracking
-static SchemeObject* all_objects = NULL;
+static SchemeObject* all_objects __attribute__((unused)) = NULL;
 static size_t object_count = 0;
 
 static SchemeObject* allocate_object(SchemeType type) {
