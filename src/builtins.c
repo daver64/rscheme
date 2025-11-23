@@ -1,4 +1,5 @@
 #include "rscheme.h"
+#include <ctype.h>
 
 void init_builtins(Environment* env) {
     // Arithmetic operations
@@ -7,6 +8,8 @@ void init_builtins(Environment* env) {
     define_variable(env, "*", make_primitive(builtin_multiply));
     define_variable(env, "/", make_primitive(builtin_divide));
     define_variable(env, "modulo", make_primitive(builtin_modulo));
+    define_variable(env, "quotient", make_primitive(builtin_quotient));
+    define_variable(env, "remainder", make_primitive(builtin_remainder));
     define_variable(env, "abs", make_primitive(builtin_abs));
     define_variable(env, "max", make_primitive(builtin_max));
     define_variable(env, "min", make_primitive(builtin_min));
@@ -49,6 +52,21 @@ void init_builtins(Environment* env) {
     // String operations
     define_variable(env, "string-length", make_primitive(builtin_string_length));
     define_variable(env, "string-ref", make_primitive(builtin_string_ref));
+    
+    // Character operations
+    define_variable(env, "char?", make_primitive(builtin_char_p));
+    define_variable(env, "char=?", make_primitive(builtin_char_eq));
+    define_variable(env, "char<?", make_primitive(builtin_char_lt));
+    define_variable(env, "char>?", make_primitive(builtin_char_gt));
+    define_variable(env, "char<=?", make_primitive(builtin_char_le));
+    define_variable(env, "char>=?", make_primitive(builtin_char_ge));
+    define_variable(env, "char-alphabetic?", make_primitive(builtin_char_alphabetic));
+    define_variable(env, "char-numeric?", make_primitive(builtin_char_numeric));
+    define_variable(env, "char-whitespace?", make_primitive(builtin_char_whitespace));
+    define_variable(env, "char-upcase", make_primitive(builtin_char_upcase));
+    define_variable(env, "char-downcase", make_primitive(builtin_char_downcase));
+    define_variable(env, "char->integer", make_primitive(builtin_char_to_integer));
+    define_variable(env, "integer->char", make_primitive(builtin_integer_to_char));
     
     // Logical operations
     define_variable(env, "not", make_primitive(builtin_not));
@@ -435,27 +453,154 @@ SchemeObject* builtin_not(SchemeObject* args, Environment* env) {
 
 // Stub implementations for missing functions
 SchemeObject* builtin_modulo(SchemeObject* args, Environment* env) {
-    (void)args; (void)env;
-    runtime_error("modulo not implemented yet");
-    return SCHEME_FALSE_OBJECT;
+    (void)env;
+    if (count_args(args) != 2) {
+        runtime_error("modulo expects 2 arguments");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* first = car(args);
+    SchemeObject* second = car(cdr(args));
+    
+    if (!is_number(first) || !is_number(second)) {
+        runtime_error("modulo expects numbers");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    int a = (int)first->value.number_value;
+    int b = (int)second->value.number_value;
+    
+    if (b == 0) {
+        runtime_error("modulo: division by zero");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    int result = a % b;
+    // Ensure result has same sign as divisor (b)
+    if ((result > 0 && b < 0) || (result < 0 && b > 0)) {
+        result += b;
+    }
+    
+    return make_number((double)result);
+}
+
+SchemeObject* builtin_quotient(SchemeObject* args, Environment* env) {
+    (void)env;
+    if (count_args(args) != 2) {
+        runtime_error("quotient expects 2 arguments");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* first = car(args);
+    SchemeObject* second = car(cdr(args));
+    
+    if (!is_number(first) || !is_number(second)) {
+        runtime_error("quotient expects numbers");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    int a = (int)first->value.number_value;
+    int b = (int)second->value.number_value;
+    
+    if (b == 0) {
+        runtime_error("quotient: division by zero");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_number((double)(a / b));
+}
+
+SchemeObject* builtin_remainder(SchemeObject* args, Environment* env) {
+    (void)env;
+    if (count_args(args) != 2) {
+        runtime_error("remainder expects 2 arguments");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* first = car(args);
+    SchemeObject* second = car(cdr(args));
+    
+    if (!is_number(first) || !is_number(second)) {
+        runtime_error("remainder expects numbers");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    int a = (int)first->value.number_value;
+    int b = (int)second->value.number_value;
+    
+    if (b == 0) {
+        runtime_error("remainder: division by zero");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_number((double)(a % b));
 }
 
 SchemeObject* builtin_abs(SchemeObject* args, Environment* env) {
-    (void)args; (void)env;
-    runtime_error("abs not implemented yet");
-    return SCHEME_FALSE_OBJECT;
+    (void)env;
+    if (count_args(args) != 1) {
+        runtime_error("abs expects 1 argument");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* arg = car(args);
+    if (!is_number(arg)) {
+        runtime_error("abs expects a number");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    double value = arg->value.number_value;
+    return make_number(value < 0 ? -value : value);
 }
 
 SchemeObject* builtin_max(SchemeObject* args, Environment* env) {
-    (void)args; (void)env;
-    runtime_error("max not implemented yet");
-    return SCHEME_FALSE_OBJECT;
+    (void)env;
+    if (is_nil(args)) {
+        runtime_error("max expects at least 1 argument");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    double max_val = car(args)->value.number_value;
+    args = cdr(args);
+    
+    while (!is_nil(args)) {
+        if (!is_number(car(args))) {
+            runtime_error("max expects numbers");
+            return SCHEME_FALSE_OBJECT;
+        }
+        double val = car(args)->value.number_value;
+        if (val > max_val) {
+            max_val = val;
+        }
+        args = cdr(args);
+    }
+    
+    return make_number(max_val);
 }
 
 SchemeObject* builtin_min(SchemeObject* args, Environment* env) {
-    (void)args; (void)env;
-    runtime_error("min not implemented yet");
-    return SCHEME_FALSE_OBJECT;
+    (void)env;
+    if (is_nil(args)) {
+        runtime_error("min expects at least 1 argument");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    double min_val = car(args)->value.number_value;
+    args = cdr(args);
+    
+    while (!is_nil(args)) {
+        if (!is_number(car(args))) {
+            runtime_error("min expects numbers");
+            return SCHEME_FALSE_OBJECT;
+        }
+        double val = car(args)->value.number_value;
+        if (val < min_val) {
+            min_val = val;
+        }
+        args = cdr(args);
+    }
+    
+    return make_number(min_val);
 }
 
 SchemeObject* builtin_eqv(SchemeObject* args, Environment* env) {
@@ -775,9 +920,238 @@ SchemeObject* builtin_string_ref(SchemeObject* args, Environment* env) {
         return SCHEME_FALSE_OBJECT;
     }
     
-    char result[2];
-    result[0] = str->value.string_value[index];
-    result[1] = '\0';
-    
-    return make_string(result);
+    return make_char(str->value.string_value[index]);
 }
+
+// Character predicates and operations
+SchemeObject* builtin_char_p(SchemeObject* args, Environment* env) {
+    (void)env;
+    
+    if (!check_arity(args, 1)) {
+        runtime_error("char? expects 1 argument");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_boolean(is_char(get_arg(args, 0)));
+}
+
+SchemeObject* builtin_char_eq(SchemeObject* args, Environment* env) {
+    (void)env;
+    
+    if (!check_arity(args, 2)) {
+        runtime_error("char=? expects 2 arguments");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* c1 = get_arg(args, 0);
+    SchemeObject* c2 = get_arg(args, 1);
+    
+    if (!is_char(c1) || !is_char(c2)) {
+        runtime_error("char=? expects character arguments");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_boolean(c1->value.char_value == c2->value.char_value);
+}
+
+SchemeObject* builtin_char_lt(SchemeObject* args, Environment* env) {
+    (void)env;
+    
+    if (!check_arity(args, 2)) {
+        runtime_error("char<? expects 2 arguments");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* c1 = get_arg(args, 0);
+    SchemeObject* c2 = get_arg(args, 1);
+    
+    if (!is_char(c1) || !is_char(c2)) {
+        runtime_error("char<? expects character arguments");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_boolean(c1->value.char_value < c2->value.char_value);
+}
+
+SchemeObject* builtin_char_gt(SchemeObject* args, Environment* env) {
+    (void)env;
+    
+    if (!check_arity(args, 2)) {
+        runtime_error("char>? expects 2 arguments");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* c1 = get_arg(args, 0);
+    SchemeObject* c2 = get_arg(args, 1);
+    
+    if (!is_char(c1) || !is_char(c2)) {
+        runtime_error("char>? expects character arguments");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_boolean(c1->value.char_value > c2->value.char_value);
+}
+
+SchemeObject* builtin_char_le(SchemeObject* args, Environment* env) {
+    (void)env;
+    
+    if (!check_arity(args, 2)) {
+        runtime_error("char<=? expects 2 arguments");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* c1 = get_arg(args, 0);
+    SchemeObject* c2 = get_arg(args, 1);
+    
+    if (!is_char(c1) || !is_char(c2)) {
+        runtime_error("char<=? expects character arguments");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_boolean(c1->value.char_value <= c2->value.char_value);
+}
+
+SchemeObject* builtin_char_ge(SchemeObject* args, Environment* env) {
+    (void)env;
+    
+    if (!check_arity(args, 2)) {
+        runtime_error("char>=? expects 2 arguments");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* c1 = get_arg(args, 0);
+    SchemeObject* c2 = get_arg(args, 1);
+    
+    if (!is_char(c1) || !is_char(c2)) {
+        runtime_error("char>=? expects character arguments");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_boolean(c1->value.char_value >= c2->value.char_value);
+}
+
+SchemeObject* builtin_char_alphabetic(SchemeObject* args, Environment* env) {
+    (void)env;
+    
+    if (!check_arity(args, 1)) {
+        runtime_error("char-alphabetic? expects 1 argument");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* c = get_arg(args, 0);
+    if (!is_char(c)) {
+        runtime_error("char-alphabetic? expects a character");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_boolean(isalpha(c->value.char_value));
+}
+
+SchemeObject* builtin_char_numeric(SchemeObject* args, Environment* env) {
+    (void)env;
+    
+    if (!check_arity(args, 1)) {
+        runtime_error("char-numeric? expects 1 argument");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* c = get_arg(args, 0);
+    if (!is_char(c)) {
+        runtime_error("char-numeric? expects a character");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_boolean(isdigit(c->value.char_value));
+}
+
+SchemeObject* builtin_char_whitespace(SchemeObject* args, Environment* env) {
+    (void)env;
+    
+    if (!check_arity(args, 1)) {
+        runtime_error("char-whitespace? expects 1 argument");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* c = get_arg(args, 0);
+    if (!is_char(c)) {
+        runtime_error("char-whitespace? expects a character");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_boolean(isspace(c->value.char_value));
+}
+
+SchemeObject* builtin_char_upcase(SchemeObject* args, Environment* env) {
+    (void)env;
+    
+    if (!check_arity(args, 1)) {
+        runtime_error("char-upcase expects 1 argument");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* c = get_arg(args, 0);
+    if (!is_char(c)) {
+        runtime_error("char-upcase expects a character");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_char(toupper(c->value.char_value));
+}
+
+SchemeObject* builtin_char_downcase(SchemeObject* args, Environment* env) {
+    (void)env;
+    
+    if (!check_arity(args, 1)) {
+        runtime_error("char-downcase expects 1 argument");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* c = get_arg(args, 0);
+    if (!is_char(c)) {
+        runtime_error("char-downcase expects a character");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_char(tolower(c->value.char_value));
+}
+
+SchemeObject* builtin_char_to_integer(SchemeObject* args, Environment* env) {
+    (void)env;
+    
+    if (!check_arity(args, 1)) {
+        runtime_error("char->integer expects 1 argument");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* c = get_arg(args, 0);
+    if (!is_char(c)) {
+        runtime_error("char->integer expects a character");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_number((double)(unsigned char)c->value.char_value);
+}
+
+SchemeObject* builtin_integer_to_char(SchemeObject* args, Environment* env) {
+    (void)env;
+    
+    if (!check_arity(args, 1)) {
+        runtime_error("integer->char expects 1 argument");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* n = get_arg(args, 0);
+    if (!is_number(n)) {
+        runtime_error("integer->char expects a number");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    int val = (int)n->value.number_value;
+    if (val < 0 || val > 255) {
+        runtime_error("integer->char: value out of character range");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    return make_char((char)val);
+}
+

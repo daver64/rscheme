@@ -13,6 +13,8 @@ SchemeObject* builtin_subtract(SchemeObject* args, Environment* env);
 SchemeObject* builtin_multiply(SchemeObject* args, Environment* env);
 SchemeObject* builtin_divide(SchemeObject* args, Environment* env);
 SchemeObject* builtin_modulo(SchemeObject* args, Environment* env);
+SchemeObject* builtin_quotient(SchemeObject* args, Environment* env);
+SchemeObject* builtin_remainder(SchemeObject* args, Environment* env);
 SchemeObject* builtin_abs(SchemeObject* args, Environment* env);
 SchemeObject* builtin_max(SchemeObject* args, Environment* env);
 SchemeObject* builtin_min(SchemeObject* args, Environment* env);
@@ -55,6 +57,21 @@ SchemeObject* builtin_string_to_symbol(SchemeObject* args, Environment* env);
 SchemeObject* builtin_symbol_to_string(SchemeObject* args, Environment* env);
 SchemeObject* builtin_number_to_string(SchemeObject* args, Environment* env);
 SchemeObject* builtin_string_to_number(SchemeObject* args, Environment* env);
+
+// Character operations
+SchemeObject* builtin_char_p(SchemeObject* args, Environment* env);
+SchemeObject* builtin_char_eq(SchemeObject* args, Environment* env);
+SchemeObject* builtin_char_lt(SchemeObject* args, Environment* env);
+SchemeObject* builtin_char_gt(SchemeObject* args, Environment* env);
+SchemeObject* builtin_char_le(SchemeObject* args, Environment* env);
+SchemeObject* builtin_char_ge(SchemeObject* args, Environment* env);
+SchemeObject* builtin_char_alphabetic(SchemeObject* args, Environment* env);
+SchemeObject* builtin_char_numeric(SchemeObject* args, Environment* env);
+SchemeObject* builtin_char_whitespace(SchemeObject* args, Environment* env);
+SchemeObject* builtin_char_upcase(SchemeObject* args, Environment* env);
+SchemeObject* builtin_char_downcase(SchemeObject* args, Environment* env);
+SchemeObject* builtin_char_to_integer(SchemeObject* args, Environment* env);
+SchemeObject* builtin_integer_to_char(SchemeObject* args, Environment* env);
 
 // Vector operations
 SchemeObject* builtin_make_vector(SchemeObject* args, Environment* env);

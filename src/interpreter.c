@@ -34,7 +34,7 @@ void clear_eval_error(void) {
 }
 
 bool is_self_evaluating(SchemeObject* expr) {
-    return expr && (is_number(expr) || is_string(expr) || is_boolean(expr) || is_nil(expr));
+    return expr && (is_number(expr) || is_string(expr) || is_boolean(expr) || is_char(expr) || is_nil(expr));
 }
 
 bool is_variable(SchemeObject* expr) {

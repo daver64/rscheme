@@ -26,7 +26,14 @@ This directory contains a progressive tutorial series for learning Scheme, from 
 
 13. **13_closures.scm** - Closures and captured environments
 14. **14_tail_recursion.scm** - Efficient recursion with tail calls
-15. **15_advanced_patterns.scm** - Currying, memoization, Y combinator, and more
+15. **15_advanced_patterns.scm** - Currying, memoization, Y combinator, Church numerals, CPS
+
+### Practical Applications
+
+16. **16_list_algorithms.scm** - Sorting (bubble, insertion, merge, quick), searching, list utilities
+17. **17_tree_structures.scm** - Binary trees, BST, tree traversal (inorder, preorder, postorder)
+18. **18_data_structures.scm** - Stacks, queues, sets, priority queues, association lists
+20. **20_math_functions.scm** - GCD, LCM, prime numbers, factorials, Fibonacci, binomial coefficients
 
 ## Running Examples
 

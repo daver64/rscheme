@@ -37,6 +37,12 @@ The `examples/` directory contains 15 progressive tutorials from beginner to adv
 - `14_tail_recursion.scm` - Efficient recursion with tail calls
 - `15_advanced_patterns.scm` - Currying, memoization, Y combinator, Church numerals, CPS
 
+**Practical Applications (16-20)**
+- `16_list_algorithms.scm` - Sorting, searching, and list utilities
+- `17_tree_structures.scm` - Binary trees, BST operations, traversals
+- `18_data_structures.scm` - Stacks, queues, sets, priority queues
+- `20_math_functions.scm` - GCD, LCM, primes, factorials, number theory
+
 Run any example: `./rscheme examples/01_hello_world.scm`
 
 ## Quick Start

@@ -140,6 +140,35 @@ static Token read_number_or_symbol(Lexer* lexer) {
     size_t buffer_size = 256;
     size_t length = 0;
     
+    // Special handling for character literals #\c
+    if (current_char(lexer) == '#') {
+        buffer[length++] = '#';
+        advance_char(lexer);
+        
+        if (current_char(lexer) == '\\') {
+            // This is a character literal
+            buffer[length++] = '\\';
+            advance_char(lexer);
+            
+            // Read the character name/value
+            while (current_char(lexer) && !is_delimiter(current_char(lexer))) {
+                if (length >= buffer_size - 1) {
+                    buffer_size *= 2;
+                    buffer = (char*)scheme_realloc(buffer, buffer_size);
+                }
+                buffer[length++] = current_char(lexer);
+                advance_char(lexer);
+            }
+            
+            buffer[length] = '\0';
+            Token token = make_token(TOKEN_SYMBOL, buffer, start_line, start_column);
+            scheme_free(buffer);
+            return token;
+        }
+        
+        // Not a character literal, continue reading as normal
+    }
+    
     while (current_char(lexer) && !is_delimiter(current_char(lexer))) {
         if (length >= buffer_size - 1) {
             buffer_size *= 2;

@@ -286,7 +286,23 @@ SchemeObject* parse_atom(Parser* parser) {
             break;
             
         case TOKEN_SYMBOL:
-            result = make_symbol(token_value);
+            // Check if it's a character literal
+            if (token_value && token_value[0] == '#' && token_value[1] == '\\') {
+                if (strcmp(token_value, "#\\space") == 0) {
+                    result = make_char(' ');
+                } else if (strcmp(token_value, "#\\newline") == 0) {
+                    result = make_char('\n');
+                } else if (strcmp(token_value, "#\\tab") == 0) {
+                    result = make_char('\t');
+                } else if (strlen(token_value) == 3) {
+                    result = make_char(token_value[2]);
+                } else {
+                    set_parse_error(parser, PARSE_ERROR_UNEXPECTED_TOKEN, "Invalid character literal");
+                    result = NULL;
+                }
+            } else {
+                result = make_symbol(token_value);
+            }
             break;
             
         case TOKEN_BOOLEAN:

@@ -73,6 +73,12 @@ SchemeObject* make_number(double value) {
     return obj;
 }
 
+SchemeObject* make_char(char value) {
+    SchemeObject* obj = allocate_object(SCHEME_CHAR);
+    obj->value.char_value = value;
+    return obj;
+}
+
 SchemeObject* make_symbol(const char* name) {
     SchemeObject* obj = allocate_object(SCHEME_SYMBOL);
     obj->value.symbol_name = scheme_strdup(name);
@@ -185,6 +191,10 @@ bool is_number(SchemeObject* obj) {
     return obj && obj->type == SCHEME_NUMBER;
 }
 
+bool is_char(SchemeObject* obj) {
+    return obj && obj->type == SCHEME_CHAR;
+}
+
 bool is_symbol(SchemeObject* obj) {
     return obj && obj->type == SCHEME_SYMBOL;
 }
@@ -251,6 +261,8 @@ bool scheme_equal(SchemeObject* a, SchemeObject* b) {
             return a->value.boolean_value == b->value.boolean_value;
         case SCHEME_NUMBER:
             return a->value.number_value == b->value.number_value;
+        case SCHEME_CHAR:
+            return a->value.char_value == b->value.char_value;
         case SCHEME_SYMBOL:
             return strcmp(a->value.symbol_name, b->value.symbol_name) == 0;
         case SCHEME_STRING:
@@ -270,6 +282,7 @@ bool scheme_eqv(SchemeObject* a, SchemeObject* b) {
         case SCHEME_NIL:
         case SCHEME_BOOLEAN:
         case SCHEME_NUMBER:
+        case SCHEME_CHAR:
         case SCHEME_SYMBOL:
             return scheme_equal(a, b);
         default:
@@ -346,6 +359,9 @@ char* object_to_string(SchemeObject* obj) {
             break;
         case SCHEME_NUMBER:
             snprintf(buffer, 1024, "%.6g", obj->value.number_value);
+            break;
+        case SCHEME_CHAR:
+            snprintf(buffer, 1024, "#\\%c", obj->value.char_value);
             break;
         case SCHEME_SYMBOL:
             snprintf(buffer, 1024, "%s", obj->value.symbol_name);

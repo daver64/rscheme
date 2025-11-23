@@ -9,6 +9,7 @@ typedef enum {
     SCHEME_NIL,
     SCHEME_BOOLEAN,
     SCHEME_NUMBER,
+    SCHEME_CHAR,
     SCHEME_SYMBOL,
     SCHEME_STRING,
     SCHEME_PAIR,
@@ -61,6 +62,7 @@ struct SchemeObject {
     union {
         bool boolean_value;
         double number_value;
+        char char_value;
         char* symbol_name;
         char* string_value;
         SchemePair pair;
@@ -81,6 +83,7 @@ struct SchemeObject {
 SchemeObject* make_nil(void);
 SchemeObject* make_boolean(bool value);
 SchemeObject* make_number(double value);
+SchemeObject* make_char(char value);
 SchemeObject* make_symbol(const char* name);
 SchemeObject* make_string(const char* str);
 SchemeObject* make_pair(SchemeObject* car, SchemeObject* cdr);
@@ -100,6 +103,7 @@ void set_cdr(SchemeObject* pair, SchemeObject* value);
 bool is_nil(SchemeObject* obj);
 bool is_boolean(SchemeObject* obj);
 bool is_number(SchemeObject* obj);
+bool is_char(SchemeObject* obj);
 bool is_symbol(SchemeObject* obj);
 bool is_string(SchemeObject* obj);
 bool is_pair(SchemeObject* obj);
