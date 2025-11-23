@@ -5,6 +5,7 @@ rscheme.pdb
 r5rs_test
 r5rs_test.c
 r5rs_compliance_test.c
+r5rs_compliance_test
 build/
 bin/
 rscheme

@@ -12,18 +12,46 @@
 - ✅ **String operations** - Complete string handling
 - ✅ **Identical behavior** - Interpreted and compiled modes produce identical results
 
+## 📚 Tutorial Examples
+
+The `examples/` directory contains 15 progressive tutorials from beginner to advanced:
+
+**Beginner (1-6)**
+- `01_hello_world.scm` - Your first Scheme program
+- `02_basic_arithmetic.scm` - Numbers and arithmetic operations
+- `03_variables.scm` - Defining and using variables
+- `04_conditionals.scm` - Making decisions with if
+- `05_functions.scm` - Creating functions with lambda and define
+- `06_lists.scm` - Working with lists and pairs
+
+**Intermediate (7-12)**
+- `07_recursion.scm` - Recursive function definitions
+- `08_higher_order.scm` - Functions as first-class values
+- `09_let_and_scope.scm` - Local bindings and lexical scope
+- `10_mutation.scm` - Mutable state with set!
+- `11_quoting.scm` - Quote, symbols, and code as data
+- `12_predicates.scm` - Type checking and predicates
+
+**Advanced (13-15)**
+- `13_closures.scm` - Closures and captured environments
+- `14_tail_recursion.scm` - Efficient recursion with tail calls
+- `15_advanced_patterns.scm` - Currying, memoization, Y combinator, Church numerals, CPS
+
+Run any example: `./rscheme examples/01_hello_world.scm`
+
 ## Quick Start
 
 ```bash
 # Build the compiler
-mkdir build && cd build
-cmake .. && cmake --build ..
-cd ..
+cmake -B build && cmake --build build
+
+# Run examples
+./rscheme examples/01_hello_world.scm
 
 # Run the comprehensive test suite
-./rscheme.exe r5rs_compliance_test.scm        # Interpreted mode
-./rscheme.exe -c r5rs_compliance_test.scm     # Compile to C
-./r5rs_compliance_test.exe                    # Run compiled version
+./rscheme r5rs_compliance_test.scm        # Interpreted mode
+./rscheme -c r5rs_compliance_test.scm     # Compile to C
+./r5rs_compliance_test                     # Run compiled version
 ```
 
 Both modes produce identical output, demonstrating perfect compliance! 🎉
@@ -119,16 +147,19 @@ Both modes produce identical output, demonstrating perfect compliance! 🎉
 
 ```bash
 # Interactive REPL
-./rscheme.exe
+./rscheme
 
 # Run Scheme file (interpreted)
-./rscheme.exe program.scm
+./rscheme program.scm
+
+# Run examples
+./rscheme examples/05_functions.scm
 
 # Compile to C
-./rscheme.exe -c program.scm
+./rscheme -c program.scm -o output
 
 # Help
-./rscheme.exe --help
+./rscheme --help
 ```
 
 ## Compilation Process
@@ -184,16 +215,18 @@ The `r5rs_compliance_test.scm` file contains comprehensive tests covering:
 ## Building from Source
 
 ```bash
-# Prerequisites: CMake, C compiler
+# Prerequisites: CMake, C compiler (gcc or clang)
 git clone <repository>
 cd rscheme
-mkdir build && cd build
-cmake ..
-cmake --build .
-cd ..
+
+# Build
+cmake -B build && cmake --build build
 
 # Test the build
-./rscheme.exe r5rs_compliance_test.scm
+./rscheme r5rs_compliance_test.scm
+
+# Try the examples
+./rscheme examples/01_hello_world.scm
 ```
 
 ## Project Structure
@@ -208,6 +241,7 @@ rscheme/
 │   ├── lexer.c            # Tokenizer
 │   └── ...
 ├── include/               # Header files
+├── examples/              # Tutorial examples (15 progressive lessons)
 ├── r5rs_compliance_test.scm # Comprehensive test suite
 ├── CMakeLists.txt         # Build configuration
 └── README.md             # This file
