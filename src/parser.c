@@ -351,6 +351,11 @@ char* unescape_string(const char* str) {
     size_t write_pos = 0;
     
     for (size_t i = 0; i < len; i++) {
+        // Bounds check to prevent buffer overflow
+        if (write_pos >= len) {
+            break;
+        }
+        
         if (str[i] == '\\' && i + 1 < len) {
             switch (str[i + 1]) {
                 case 'n': result[write_pos++] = '\n'; i++; break;
@@ -358,7 +363,11 @@ char* unescape_string(const char* str) {
                 case 'r': result[write_pos++] = '\r'; i++; break;
                 case '\\': result[write_pos++] = '\\'; i++; break;
                 case '"': result[write_pos++] = '"'; i++; break;
-                default: result[write_pos++] = str[i]; break;
+                default: 
+                    if (write_pos < len) {
+                        result[write_pos++] = str[i];
+                    }
+                    break;
             }
         } else {
             result[write_pos++] = str[i];

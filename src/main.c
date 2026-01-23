@@ -1,4 +1,6 @@
 #include "rscheme.h"
+#include <errno.h>
+#include <string.h>
 
 void print_version(void) {
     printf("RScheme %d.%d.%d - R5RS Scheme Implementation\n",
@@ -103,7 +105,8 @@ static void run_interpreter_mode(AppContext* ctx) {
         // Load and execute file
         FILE* file = fopen(ctx->input_file, "rb");  // Open in binary mode
         if (!file) {
-            fprintf(stderr, "Error: Cannot open file: %s\n", ctx->input_file);
+            fprintf(stderr, "Error: Cannot open file '%s': %s\n", 
+                    ctx->input_file, strerror(errno));
             return;
         }
         
@@ -116,6 +119,7 @@ static void run_interpreter_mode(AppContext* ctx) {
         size_t bytes_read = fread(content, 1, length, file);
         content[bytes_read] = '\0';
         fclose(file);
+        file = NULL;  // Prevent double-close
         
         // Parse and evaluate
         Parser* parser = create_parser(content);
@@ -126,7 +130,9 @@ static void run_interpreter_mode(AppContext* ctx) {
             
             if (has_parse_error(parser)) {
                 print_parse_error(parser, stderr);
-                break;
+                destroy_parser(parser);
+                scheme_free(content);
+                return;
             }
             
             if (!expr) {
@@ -137,7 +143,9 @@ static void run_interpreter_mode(AppContext* ctx) {
             
             if (has_eval_error()) {
                 print_eval_error(stderr);
-                break;
+                destroy_parser(parser);
+                scheme_free(content);
+                return;
             }
             
             if (ctx->verbose && result) {

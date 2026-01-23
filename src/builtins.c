@@ -325,12 +325,17 @@ SchemeObject* builtin_car(SchemeObject* args, Environment* env) {
     }
     
     SchemeObject* pair = get_arg(args, 0);
+    if (!pair) {
+        runtime_error("car: argument is null");
+        return SCHEME_FALSE_OBJECT;
+    }
     if (!is_pair(pair)) {
         runtime_error("car expects a pair");
         return SCHEME_FALSE_OBJECT;
     }
     
-    return car(pair);
+    SchemeObject* result = car(pair);
+    return result ? result : SCHEME_NIL_OBJECT;
 }
 
 SchemeObject* builtin_cdr(SchemeObject* args, Environment* env) {
@@ -342,12 +347,17 @@ SchemeObject* builtin_cdr(SchemeObject* args, Environment* env) {
     }
     
     SchemeObject* pair = get_arg(args, 0);
+    if (!pair) {
+        runtime_error("cdr: argument is null");
+        return SCHEME_FALSE_OBJECT;
+    }
     if (!is_pair(pair)) {
         runtime_error("cdr expects a pair");
         return SCHEME_FALSE_OBJECT;
     }
     
-    return cdr(pair);
+    SchemeObject* result = cdr(pair);
+    return result ? result : SCHEME_NIL_OBJECT;
 }
 
 SchemeObject* builtin_list(SchemeObject* args, Environment* env) {
@@ -403,8 +413,10 @@ SchemeObject* builtin_display(SchemeObject* args, Environment* env) {
     
     SchemeObject* obj = get_arg(args, 0);
     
-    if (is_string(obj)) {
-        printf("%s", obj->value.string_value);
+    if (!obj) {
+        printf("#<null>");
+    } else if (is_string(obj)) {
+        printf("%s", obj->value.string_value ? obj->value.string_value : "");
     } else {
         print_object(obj, stdout);
     }
@@ -429,7 +441,11 @@ SchemeObject* builtin_write(SchemeObject* args, Environment* env) {
     }
     
     SchemeObject* obj = get_arg(args, 0);
-    print_object(obj, stdout);
+    if (!obj) {
+        printf("#<null>");
+    } else {
+        print_object(obj, stdout);
+    }
     
     return SCHEME_NIL_OBJECT;
 }
@@ -560,7 +576,13 @@ SchemeObject* builtin_max(SchemeObject* args, Environment* env) {
         return SCHEME_FALSE_OBJECT;
     }
     
-    double max_val = car(args)->value.number_value;
+    SchemeObject* first = car(args);
+    if (!is_number(first)) {
+        runtime_error("max expects numbers");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    double max_val = first->value.number_value;
     args = cdr(args);
     
     while (!is_nil(args)) {
@@ -585,7 +607,13 @@ SchemeObject* builtin_min(SchemeObject* args, Environment* env) {
         return SCHEME_FALSE_OBJECT;
     }
     
-    double min_val = car(args)->value.number_value;
+    SchemeObject* first = car(args);
+    if (!is_number(first)) {
+        runtime_error("min expects numbers");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    double min_val = first->value.number_value;
     args = cdr(args);
     
     while (!is_nil(args)) {
@@ -604,9 +632,17 @@ SchemeObject* builtin_min(SchemeObject* args, Environment* env) {
 }
 
 SchemeObject* builtin_eqv(SchemeObject* args, Environment* env) {
-    (void)args; (void)env;
-    runtime_error("eqv? not implemented yet");
-    return SCHEME_FALSE_OBJECT;
+    (void)env;
+    
+    if (!check_arity(args, 2)) {
+        runtime_error("eqv? expects 2 arguments");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* a = get_arg(args, 0);
+    SchemeObject* b = get_arg(args, 1);
+    
+    return make_boolean(scheme_eqv(a, b));
 }
 
 SchemeObject* builtin_gt(SchemeObject* args, Environment* env) {
@@ -722,20 +758,25 @@ SchemeObject* builtin_length(SchemeObject* args, Environment* env) {
 SchemeObject* builtin_append(SchemeObject* args, Environment* env) {
     (void)env; // Unused
     
-    if (is_null(args)) {
+    // No arguments - return empty list
+    if (!args || is_nil(args)) {
         return SCHEME_NIL_OBJECT;
     }
     
-    if (is_null(cdr(args))) {
-        return car(args);
+    SchemeObject* first = car(args);
+    SchemeObject* rest_args = cdr(args);
+    
+    // Single argument - return it
+    if (is_nil(rest_args)) {
+        return first ? first : SCHEME_NIL_OBJECT;
     }
     
-    // Recursive implementation: append first list to result of appending rest
-    SchemeObject* first = car(args);
-    SchemeObject* rest = builtin_append(cdr(args), env);
+    // Multiple arguments - recursively append the rest first
+    SchemeObject* rest_result = builtin_append(rest_args, env);
     
-    if (is_null(first)) {
-        return rest;
+    // If first is empty, return the rest
+    if (!first || is_nil(first)) {
+        return rest_result;
     }
     
     if (!is_pair(first)) {
@@ -743,7 +784,33 @@ SchemeObject* builtin_append(SchemeObject* args, Environment* env) {
         return SCHEME_FALSE_OBJECT;
     }
     
-    return make_pair(car(first), builtin_append(make_pair(cdr(first), make_pair(rest, SCHEME_NIL_OBJECT)), env));
+    // Copy the first list and append rest_result at the end
+    SchemeObject* result_head = SCHEME_NIL_OBJECT;
+    SchemeObject* result_tail = NULL;
+    
+    SchemeObject* current = first;
+    while (current && is_pair(current)) {
+        SchemeObject* elem = car(current);
+        SchemeObject* new_cell = make_pair(elem, SCHEME_NIL_OBJECT);
+        
+        if (is_nil(result_head)) {
+            result_head = new_cell;
+            result_tail = new_cell;
+        } else {
+            set_cdr(result_tail, new_cell);
+            result_tail = new_cell;
+        }
+        
+        current = cdr(current);
+    }
+    
+    // Connect the rest to the end
+    if (result_tail) {
+        set_cdr(result_tail, rest_result);
+        return result_head;
+    } else {
+        return rest_result;
+    }
 }
 
 SchemeObject* builtin_reverse(SchemeObject* args, Environment* env) {
@@ -756,7 +823,7 @@ SchemeObject* builtin_reverse(SchemeObject* args, Environment* env) {
     
     SchemeObject* list = get_arg(args, 0);
     
-    if (is_null(list)) {
+    if (!list || is_null(list)) {
         return SCHEME_NIL_OBJECT;
     }
     
@@ -768,12 +835,15 @@ SchemeObject* builtin_reverse(SchemeObject* args, Environment* env) {
     SchemeObject* result = SCHEME_NIL_OBJECT;
     SchemeObject* current = list;
     
-    while (!is_null(current)) {
+    while (current && !is_null(current)) {
         if (!is_pair(current)) {
             runtime_error("reverse expects a proper list");
             return SCHEME_FALSE_OBJECT;
         }
-        result = make_pair(car(current), result);
+        SchemeObject* elem = car(current);
+        if (elem) {  // Additional null check
+            result = make_pair(elem, result);
+        }
         current = cdr(current);
     }
     
@@ -820,9 +890,15 @@ SchemeObject* builtin_list_ref(SchemeObject* args, Environment* env) {
 }
 
 SchemeObject* builtin_list_p(SchemeObject* args, Environment* env) {
-    (void)args; (void)env;
-    runtime_error("list? not implemented yet");
-    return SCHEME_FALSE_OBJECT;
+    (void)env;
+    
+    if (!check_arity(args, 1)) {
+        runtime_error("list? expects 1 argument");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    SchemeObject* obj = get_arg(args, 0);
+    return make_boolean(is_list(obj));
 }
 
 SchemeObject* builtin_string_p(SchemeObject* args, Environment* env) {
@@ -899,11 +975,16 @@ SchemeObject* builtin_string_ref(SchemeObject* args, Environment* env) {
         return SCHEME_FALSE_OBJECT;
     }
     
-    SchemeObject* str = get_arg(args, 0);
+    SchemeObject* str_obj = get_arg(args, 0);
     SchemeObject* index_obj = get_arg(args, 1);
     
-    if (!is_string(str)) {
-        runtime_error("string-ref expects a string as first argument");
+    if (!str_obj || !index_obj) {
+        runtime_error("string-ref: null argument");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    if (!is_string(str_obj)) {
+        runtime_error("string-ref expects a string");
         return SCHEME_FALSE_OBJECT;
     }
     
@@ -913,14 +994,24 @@ SchemeObject* builtin_string_ref(SchemeObject* args, Environment* env) {
     }
     
     int index = (int)index_obj->value.number_value;
-    int len = strlen(str->value.string_value);
+    if (index < 0) {
+        runtime_error("string-ref index must be non-negative");
+        return SCHEME_FALSE_OBJECT;
+    }
     
-    if (index < 0 || index >= len) {
+    const char* str = str_obj->value.string_value;
+    if (!str) {
+        runtime_error("string-ref: string value is null");
+        return SCHEME_FALSE_OBJECT;
+    }
+    
+    size_t len = strlen(str);
+    if ((size_t)index >= len) {
         runtime_error("string-ref index out of bounds");
         return SCHEME_FALSE_OBJECT;
     }
     
-    return make_char(str->value.string_value[index]);
+    return make_char(str[index]);
 }
 
 // Character predicates and operations

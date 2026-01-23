@@ -1,5 +1,9 @@
 #include "rscheme.h"
 
+// THREAD SAFETY NOTE:
+// Environment operations are NOT thread-safe. Environments use reference counting
+// but there is no atomic operations or locking. Single-threaded use only.
+
 Environment* make_environment(Environment* parent) {
     Environment* env = (Environment*)scheme_malloc(sizeof(Environment));
     env->bindings = NULL;

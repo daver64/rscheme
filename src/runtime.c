@@ -1,6 +1,11 @@
 #include "rscheme.h"
 #include <stdarg.h>
 
+// THREAD SAFETY NOTE:
+// This runtime is NOT thread-safe. All global state (runtime_state, object allocation)
+// assumes single-threaded execution. Do not use this interpreter from multiple threads
+// without adding appropriate synchronization mechanisms.
+
 // Global runtime state
 static struct {
     bool initialized;
@@ -67,6 +72,8 @@ void* scheme_realloc(void* ptr, size_t size) {
 
 void scheme_free(void* ptr) {
     if (ptr) {
+        // Note: We can't accurately track freed size without storing size metadata
+        // This is a limitation of the simple wrapper approach
         free(ptr);
     }
 }

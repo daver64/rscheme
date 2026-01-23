@@ -161,7 +161,10 @@ SchemeObject* eval_expression(SchemeObject* expr, Environment* env) {
         return apply_procedure(procedure, args, env);
     }
     
-    set_eval_error(EVAL_ERROR_INVALID_SYNTAX, "Invalid expression");
+    char error_msg[SCHEME_SMALL_BUFFER_SIZE];
+    snprintf(error_msg, sizeof(error_msg), "Invalid expression type: expected self-evaluating value, variable, or list, got type %d", 
+             expr ? (int)expr->type : -1);
+    set_eval_error(EVAL_ERROR_INVALID_SYNTAX, error_msg);
     return NULL;
 }
 
@@ -192,7 +195,7 @@ SchemeObject* eval_quote(SchemeObject* args, Environment* env) {
 
 SchemeObject* eval_if(SchemeObject* args, Environment* env) {
     if (!args || !is_pair(args)) {
-        set_eval_error(EVAL_ERROR_WRONG_ARITY, "if expects at least 2 arguments");
+        set_eval_error(EVAL_ERROR_WRONG_ARITY, "if: missing test expression");
         return NULL;
     }
     
@@ -200,7 +203,7 @@ SchemeObject* eval_if(SchemeObject* args, Environment* env) {
     args = cdr(args);
     
     if (!args || !is_pair(args)) {
-        set_eval_error(EVAL_ERROR_WRONG_ARITY, "if expects at least 2 arguments");
+        set_eval_error(EVAL_ERROR_WRONG_ARITY, "if: missing consequent expression (requires test, consequent, and optional alternative)");
         return NULL;
     }
     
@@ -496,6 +499,10 @@ SchemeObject* eval_let(SchemeObject* args, Environment* env) {
     
     // Create new environment
     Environment* let_env = make_environment(env);
+    if (!let_env) {
+        set_eval_error(EVAL_ERROR_RUNTIME, "Failed to create let environment");
+        return NULL;
+    }
     
     // Process bindings
     SchemeObject* current_binding = bindings;
@@ -522,6 +529,7 @@ SchemeObject* eval_let(SchemeObject* args, Environment* env) {
         // Evaluate the value in the original environment
         SchemeObject* value = eval_expression(val_expr, env);
         if (has_eval_error()) {
+            release_environment(let_env);
             return NULL;
         }
         
@@ -577,6 +585,7 @@ SchemeObject* eval_let_star(SchemeObject* args, Environment* env) {
         // Evaluate the value in the current environment (includes previous bindings)
         SchemeObject* value = eval_expression(val_expr, current_env);
         if (has_eval_error()) {
+            release_environment(current_env);
             return NULL;
         }
         
@@ -643,6 +652,7 @@ SchemeObject* eval_letrec(SchemeObject* args, Environment* env) {
         // Evaluate the value in the environment with all variables bound
         SchemeObject* value = eval_expression(val_expr, letrec_env);
         if (has_eval_error()) {
+            release_environment(letrec_env);
             return NULL;
         }
         

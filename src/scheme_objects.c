@@ -1,6 +1,10 @@
 #include "rscheme.h"
 #include <stdarg.h>
 
+// THREAD SAFETY NOTE:
+// Object allocation uses global state and is NOT thread-safe.
+// All object operations assume single-threaded execution.
+
 // Global objects
 SchemeObject* SCHEME_NIL_OBJECT = NULL;
 SchemeObject* SCHEME_TRUE_OBJECT = NULL;
@@ -301,9 +305,62 @@ void retain_object(SchemeObject* obj) {
 }
 
 void release_object(SchemeObject* obj) {
-    if (obj && --obj->ref_count <= 0) {
-        // Object can be collected
-        obj->marked = false;
+    if (!obj || obj->ref_count > 1000) {
+        // Don't release global singleton objects (nil, true, false)
+        if (obj && obj->ref_count <= 1000) {
+            obj->ref_count--;
+        }
+        return;
+    }
+    
+    if (--obj->ref_count <= 0) {
+        // Free object contents based on type
+        switch (obj->type) {
+            case SCHEME_SYMBOL:
+                if (obj->value.symbol_name) {
+                    scheme_free(obj->value.symbol_name);
+                }
+                break;
+            case SCHEME_STRING:
+                if (obj->value.string_value) {
+                    scheme_free(obj->value.string_value);
+                }
+                break;
+            case SCHEME_PAIR:
+                release_object(obj->value.pair.car);
+                release_object(obj->value.pair.cdr);
+                break;
+            case SCHEME_PROCEDURE:
+                release_object(obj->value.procedure.parameters);
+                release_object(obj->value.procedure.body);
+                if (obj->value.procedure.closure) {
+                    release_environment(obj->value.procedure.closure);
+                }
+                if (obj->value.procedure.name) {
+                    scheme_free(obj->value.procedure.name);
+                }
+                break;
+            case SCHEME_VECTOR:
+                for (size_t i = 0; i < obj->value.vector.length; i++) {
+                    release_object(obj->value.vector.elements[i]);
+                }
+                if (obj->value.vector.elements) {
+                    scheme_free(obj->value.vector.elements);
+                }
+                break;
+            case SCHEME_PORT:
+                if (obj->value.port.file) {
+                    fclose(obj->value.port.file);
+                }
+                if (obj->value.port.filename) {
+                    scheme_free(obj->value.port.filename);
+                }
+                break;
+            default:
+                break;
+        }
+        // Free the object itself
+        scheme_free(obj);
     }
 }
 
@@ -348,7 +405,9 @@ char* object_to_string(SchemeObject* obj) {
         return scheme_strdup("null");
     }
     
-    char* buffer = (char*)scheme_malloc(1024);
+    // Use a dynamic buffer for complex structures
+    size_t buffer_size = SCHEME_LARGE_BUFFER_SIZE;
+    char* buffer = (char*)scheme_malloc(buffer_size);
     
     switch (obj->type) {
         case SCHEME_NIL:
@@ -358,22 +417,86 @@ char* object_to_string(SchemeObject* obj) {
             strcpy(buffer, obj->value.boolean_value ? "#t" : "#f");
             break;
         case SCHEME_NUMBER:
-            snprintf(buffer, 1024, "%.6g", obj->value.number_value);
+            snprintf(buffer, buffer_size, "%.6g", obj->value.number_value);
             break;
         case SCHEME_CHAR:
-            snprintf(buffer, 1024, "#\\%c", obj->value.char_value);
+            if (obj->value.char_value == ' ') {
+                strcpy(buffer, "#\\space");
+            } else if (obj->value.char_value == '\n') {
+                strcpy(buffer, "#\\newline");
+            } else if (obj->value.char_value == '\t') {
+                strcpy(buffer, "#\\tab");
+            } else {
+                snprintf(buffer, buffer_size, "#\\%c", obj->value.char_value);
+            }
             break;
         case SCHEME_SYMBOL:
-            snprintf(buffer, 1024, "%s", obj->value.symbol_name);
+            snprintf(buffer, buffer_size, "%s", obj->value.symbol_name ? obj->value.symbol_name : "<null-symbol>");
             break;
         case SCHEME_STRING:
-            snprintf(buffer, 1024, "\"%s\"", obj->value.string_value);
+            snprintf(buffer, buffer_size, "\"%s\"", obj->value.string_value ? obj->value.string_value : "");
             break;
-        case SCHEME_PAIR:
+        case SCHEME_PAIR: {
+            // Proper list printing
             strcpy(buffer, "(");
-            // This is simplified - proper list printing would be more complex
-            strcat(buffer, "...)");
+            size_t pos = 1;
+            SchemeObject* current = obj;
+            bool first = true;
+            
+            while (current && is_pair(current)) {
+                if (!first && pos + 1 < buffer_size) {
+                    buffer[pos++] = ' ';
+                    buffer[pos] = '\0';
+                }
+                first = false;
+                
+                SchemeObject* car_obj = car(current);
+                char* car_str = object_to_string(car_obj);
+                size_t car_len = strlen(car_str);
+                
+                // Check if we need more space
+                if (pos + car_len + 10 >= buffer_size) {
+                    buffer_size *= 2;
+                    buffer = (char*)scheme_realloc(buffer, buffer_size);
+                }
+                
+                strcpy(buffer + pos, car_str);
+                pos += car_len;
+                scheme_free(car_str);
+                
+                current = cdr(current);
+                
+                // Limit list length in string representation to prevent huge outputs
+                if (pos > SCHEME_MAX_STRING_OUTPUT) {
+                    strcpy(buffer + pos, " ...");
+                    pos += 4;
+                    break;
+                }
+            }
+            
+            // Handle improper lists (dotted pairs)
+            if (current && !is_nil(current)) {
+                if (pos + 3 < buffer_size) {
+                    strcpy(buffer + pos, " . ");
+                    pos += 3;
+                }
+                char* cdr_str = object_to_string(current);
+                size_t cdr_len = strlen(cdr_str);
+                if (pos + cdr_len + 2 >= buffer_size) {
+                    buffer_size = pos + cdr_len + 10;
+                    buffer = (char*)scheme_realloc(buffer, buffer_size);
+                }
+                strcpy(buffer + pos, cdr_str);
+                pos += cdr_len;
+                scheme_free(cdr_str);
+            }
+            
+            if (pos + 2 < buffer_size) {
+                buffer[pos++] = ')';
+                buffer[pos] = '\0';
+            }
             break;
+        }
         case SCHEME_PROCEDURE:
             strcpy(buffer, "#<procedure>");
             break;

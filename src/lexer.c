@@ -90,8 +90,8 @@ static Token read_string(Lexer* lexer) {
     
     advance_char(lexer); // Skip opening quote
     
-    char* buffer = (char*)scheme_malloc(1024);
-    size_t buffer_size = 1024;
+    char* buffer = (char*)scheme_malloc(SCHEME_LARGE_BUFFER_SIZE);
+    size_t buffer_size = SCHEME_LARGE_BUFFER_SIZE;
     size_t length = 0;
     
     while (current_char(lexer) && current_char(lexer) != '"') {
@@ -136,8 +136,8 @@ static Token read_number_or_symbol(Lexer* lexer) {
     size_t start_line = lexer->line;
     size_t start_column = lexer->column;
     
-    char* buffer = (char*)scheme_malloc(256);
-    size_t buffer_size = 256;
+    char* buffer = (char*)scheme_malloc(SCHEME_SMALL_BUFFER_SIZE);
+    size_t buffer_size = SCHEME_SMALL_BUFFER_SIZE;
     size_t length = 0;
     
     // Special handling for character literals #\c
@@ -292,8 +292,8 @@ void print_token(const Token* token, FILE* out) {
 }
 
 char* token_to_string(const Token* token) {
-    char* buffer = (char*)scheme_malloc(256);
-    snprintf(buffer, 256, "Token{type=%d, value='%s', line=%zu, column=%zu}",
+    char* buffer = (char*)scheme_malloc(SCHEME_SMALL_BUFFER_SIZE);
+    snprintf(buffer, SCHEME_SMALL_BUFFER_SIZE, "Token{type=%d, value='%s', line=%zu, column=%zu}",
              token->type,
              token->value ? token->value : "",
              token->line,

@@ -3,6 +3,13 @@
 
 #include "scheme_objects.h"
 
+// Buffer size constants
+#define SCHEME_SMALL_BUFFER_SIZE 256
+#define SCHEME_MEDIUM_BUFFER_SIZE 512
+#define SCHEME_LARGE_BUFFER_SIZE 1024
+#define SCHEME_MAX_STRING_OUTPUT 500
+#define SCHEME_MAX_VARIABLES 100
+
 // Runtime initialization and cleanup
 void init_runtime(void);
 void cleanup_runtime(void);

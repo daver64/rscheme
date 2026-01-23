@@ -1,5 +1,7 @@
 #include "rscheme.h"
 #include <stdarg.h>
+#include <errno.h>
+#include <string.h>
 
 // Forward declarations
 void compile_lambda_if_expression(SchemeObject* if_expr, SchemeObject* params, char* lambda_code, int* offset, int max_size);
@@ -123,7 +125,7 @@ void generate_c_header(CompilerContext* ctx) {
     fprintf(ctx->output, "void define_variable(const char* name, SchemeObject* value);\n\n");
     
     fprintf(ctx->output, "// Global variables (simple implementation)\n");
-    fprintf(ctx->output, "#define MAX_VARS 100\n");
+    fprintf(ctx->output, "#define MAX_VARS %d\n", SCHEME_MAX_VARIABLES);
     fprintf(ctx->output, "char* var_names[MAX_VARS];\n");
     fprintf(ctx->output, "SchemeObject* var_values[MAX_VARS];\n");
     fprintf(ctx->output, "int var_count = 0;\n\n");
@@ -329,6 +331,13 @@ void generate_runtime_functions(CompilerContext* ctx) {
     fprintf(ctx->output, "    scheme_false = malloc(sizeof(SchemeObject));\n");
     fprintf(ctx->output, "    scheme_false->type = SCHEME_BOOLEAN;\n");
     fprintf(ctx->output, "    scheme_false->value.boolean_value = false;\n");
+    fprintf(ctx->output, "}\n\n");
+    
+    // Add cleanup function for generated code
+    fprintf(ctx->output, "void cleanup_runtime() {\n");
+    fprintf(ctx->output, "    if (scheme_nil) free(scheme_nil);\n");
+    fprintf(ctx->output, "    if (scheme_true) free(scheme_true);\n");
+    fprintf(ctx->output, "    if (scheme_false) free(scheme_false);\n");
     fprintf(ctx->output, "}\n\n");
     
     // Additional runtime functions
@@ -866,9 +875,7 @@ bool compile_to_c(SchemeObject* expr, const char* output_file, bool optimize) {
     
     // Now emit lambda functions to the actual output
     ctx->output = orig_output;
-    fprintf(ctx->output, "// DEBUG: About to emit lambda functions\n");
     emit_lambda_functions(ctx);
-    fprintf(ctx->output, "// DEBUG: Finished emitting lambda functions\n");
     
     // Then emit the main function
     rewind(temp_main);
@@ -887,7 +894,7 @@ bool compile_to_c(SchemeObject* expr, const char* output_file, bool optimize) {
 bool compile_file(const char* input_file, const char* output_file, bool optimize) {
     FILE* input = fopen(input_file, "rb");  // Use binary mode like the interpreter
     if (!input) {
-        runtime_error("Cannot open input file: %s", input_file);
+        runtime_error("Cannot open input file '%s': %s", input_file, strerror(errno));
         return false;
     }
     
@@ -900,13 +907,18 @@ bool compile_file(const char* input_file, const char* output_file, bool optimize
     size_t bytes_read = fread(content, 1, length, input);
     content[bytes_read] = '\0';
     fclose(input);
+    input = NULL;  // Prevent double-close
     
     // Parse all expressions
     Parser* parser = create_parser(content);
+    if (!parser) {
+        scheme_free(content);
+        return false;
+    }
     
     FILE* output = fopen(output_file, "w");
     if (!output) {
-        runtime_error("Cannot open output file: %s", output_file);
+        runtime_error("Cannot open output file '%s': %s", output_file, strerror(errno));
         scheme_free(content);
         destroy_parser(parser);
         return false;
@@ -945,15 +957,14 @@ bool compile_file(const char* input_file, const char* output_file, bool optimize
         fprintf(ctx->output, "\n");
     }
     
-    // Generate main function end
+    // Generate main function end with cleanup
+    fprintf(ctx->output, "    cleanup_runtime();\n");
     fprintf(ctx->output, "    return 0;\n");
     fprintf(ctx->output, "}\n");
     
     // Now emit lambda functions to the actual output
     ctx->output = orig_output;
-    fprintf(ctx->output, "// DEBUG: About to emit lambda functions\n");
     emit_lambda_functions(ctx);
-    fprintf(ctx->output, "// DEBUG: Finished emitting lambda functions\n");
     
     // Then emit the main function
     rewind(temp_main);
@@ -962,9 +973,11 @@ bool compile_file(const char* input_file, const char* output_file, bool optimize
         fputs(buffer, ctx->output);
     }
     fclose(temp_main);
+    temp_main = NULL;  // Prevent double-close
     
     destroy_compiler_context(ctx);
     fclose(output);
+    output = NULL;  // Prevent double-close
     destroy_parser(parser);
     scheme_free(content);
     
